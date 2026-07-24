@@ -1,0 +1,25 @@
+[Unit]
+Description=Sken slev — projde zdroje a pošle okamžitá upozornění
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=slevy
+Group=slevy
+WorkingDirectory=/opt/slevy-bot
+EnvironmentFile=/etc/slevy-bot/env
+ExecStart=/opt/slevy-bot/.venv/bin/python -m src.main
+
+# Síť občas zlobí; jeden neúspěšný běh nemá smysl řešit, za půl hodiny je další.
+TimeoutStartSec=900
+
+# Omezení práv — služba potřebuje jen svůj adresář a síť.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/slevy-bot/data
+
+[Install]
+WantedBy=multi-user.target

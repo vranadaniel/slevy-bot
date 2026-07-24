@@ -111,46 +111,80 @@ Zkušební průchod, který nic neodesílá ani nezapisuje:
 python -m src.main --dry-run
 ```
 
-### 3. Nasazení na GitHub Actions
+### 3. Nasazení na server
 
-Repozitář udělej **veřejný** — má neomezené free minuty. Privátní by na cronu
-po půl hodině (1 440 běhů měsíčně) vyčerpal free limit 2 000 minut.
+Na Debianu nebo Ubuntu stačí jeden příkaz:
 
-Do *Settings → Secrets and variables → Actions* přidej `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID` a `OPENROUTER_API_KEY`.
+```bash
+curl -fsSL https://raw.githubusercontent.com/vranadaniel/slevy-bot/main/deploy/install.sh | sudo bash
+```
 
-**První běh pusť ručně s volbou `bootstrap`** (*Actions → Sken slev → Run workflow*).
-Označí aktuální obsah feedů za viděný, takže tě bot nezasype tím, co už ve světě
-chvíli visí. Teprve pak nech běžet cron.
+Skript nainstaluje závislosti, založí systémového uživatele `slevy`, naklonuje
+repozitář do `/opt/slevy-bot`, vytvoří virtuální prostředí a zapne systemd timery.
+Pokud v repozitáři existuje větev `data`, **převezme z ní databázi** — jinak by
+se vynulovala deduplikace a přišla by záplava opakovaných upozornění.
 
-Stav (SQLite s cenovou historií) žije na oddělené větvi `data` a přepisuje se
-jediným commitem, takže repozitář nebobtná ani po roce provozu.
+Pak vyplň tokeny a ověř spojení:
+
+```bash
+sudo nano /etc/slevy-bot/env
+```
+
+```bash
+sudo systemctl start slevy-scan && journalctl -u slevy-scan -n 30
+```
+
+**Při úplně nové instalaci** (bez převzaté databáze) pusť nejdřív bootstrap, ať
+tě bot nezasype tím, co ve světě visí už týden:
+
+```bash
+cd /opt/slevy-bot && sudo -u slevy .venv/bin/python -m src.main --bootstrap
+```
+
+Aktualizace na novou verzi je tentýž skript — je idempotentní a tokeny nepřepisuje:
+
+```bash
+sudo bash /opt/slevy-bot/deploy/install.sh
+```
+
+### Provoz
+
+```bash
+systemctl list-timers 'slevy-*'      # kdy poběží příště
+journalctl -u slevy-scan -n 50       # log posledního skenu
+journalctl -u slevy-scan -f          # sledovat živě
+systemctl start slevy-digest         # poslat souhrn hned
+```
 
 ---
 
 ## Plán běhů
 
-**GitHub nikde neukazuje, co a kdy poběží příště** — v Actions je jen historie a
-API žádné pole s příštím během nevystavuje. Jediný zdroj pravdy jsou soubory
-workflow, takže tady je jejich obsah:
-
-| Workflow | Cron (UTC) | Kdy to je u nás | Co dělá |
-|---|---|---|---|
-| [Sken slev](.github/workflows/scan.yml) | `13,43 * * * *` | v :13 a :43 každou hodinu | projde zdroje, pošle okamžitá upozornění |
-| [Denní souhrn](.github/workflows/digest.yml) | `9 17 * * *` | 19:09 letního času, 18:09 zimního | odešle nasbírané položky |
-
-Minuty jsou schválně „divné". Zápis `*/30` míří na celou a půl hodiny, tedy na
-špičku, kdy GitHub naplánované běhy odsouvá a při zátěži i zahazuje.
-
-Aktuální plán si kdykoliv ověříš přímo ze zdroje:
+| Jednotka | Kdy | Co dělá |
+|---|---|---|
+| `slevy-scan.timer` | v :13 a :43 každou hodinu | projde zdroje, pošle okamžitá upozornění |
+| `slevy-digest.timer` | 19:09 místního času | odešle nasbírané položky |
 
 ```bash
-gh workflow view scan.yml --yaml --repo vranadaniel/slevy-bot
+systemctl list-timers 'slevy-*'
 ```
 
-Jestli cron opravdu běží, poznáš podle toho, že v seznamu přibude položka
-s popiskem `Scheduled` místo `Manually run by`. Vyfiltruješ ji přes **Event →
-schedule**. Zpoždění 5–20 minut je normální; GitHub přesnost negarantuje.
+Na rozdíl od GitHub Actions systemd rovnou ukáže, **kdy poběží příště** — GitHub
+takovou obrazovku vůbec nemá, tam je vidět jen historie.
+
+`Persistent=true` navíc dohoní běh zameškaný výpadkem nebo restartem, což cron neumí.
+
+### Proč to neběží na GitHub Actions
+
+Workflow v `.github/workflows/` zůstávají, ale **jen pro ruční spuštění**.
+GitHub u tohohle repozitáře nespustil z cronu ani jeden běh, přestože obě
+workflow byly aktivní, Actions povolené a cron platný — vyzkoušeno na `*/30`
+i na posunuté minuty. U čerstvě založených účtů GitHub plánované běhy omezuje
+jako obranu proti zneužití Actions na těžbu.
+
+Pozor: ruční běh na GitHubu pracuje s vlastní kopií stavu z větve `data`, takže
+může poslat upozornění, které server už odeslal. **Zdrojem pravdy je databáze
+na serveru.**
 
 ## Příkazy
 

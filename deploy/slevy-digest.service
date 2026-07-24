@@ -1,0 +1,23 @@
+[Unit]
+Description=Denní souhrn slev
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=slevy
+Group=slevy
+WorkingDirectory=/opt/slevy-bot
+EnvironmentFile=/etc/slevy-bot/env
+ExecStart=/opt/slevy-bot/.venv/bin/python -m src.main --digest
+
+TimeoutStartSec=300
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/slevy-bot/data
+
+[Install]
+WantedBy=multi-user.target

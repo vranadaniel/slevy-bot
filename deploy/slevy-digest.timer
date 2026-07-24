@@ -1,0 +1,13 @@
+[Unit]
+Description=Spouští denní souhrn slev
+
+[Timer]
+# 19:09 místního času. Časové pásmo dropletu nastaví install.sh na Europe/Prague,
+# takže se to samo posune s letním a zimním časem — na rozdíl od pevného UTC.
+OnCalendar=*-*-* 19:09:00
+
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

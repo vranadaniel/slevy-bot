@@ -1,0 +1,15 @@
+[Unit]
+Description=Spouští sken slev každou půlhodinu
+
+[Timer]
+# V :13 a :43 každou hodinu, v místním čase dropletu.
+OnCalendar=*:13,43
+
+# Dohnat běh zameškaný výpadkem nebo restartem. Tohle cron neumí.
+Persistent=true
+
+# Drobné rozprostření, ať se všechny stroje netrefí do stejné vteřiny.
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

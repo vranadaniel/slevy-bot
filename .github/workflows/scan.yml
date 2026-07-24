@@ -1,12 +1,17 @@
 name: Sken slev
 
+# Plánované spouštění je schválně vypnuté.
+#
+# GitHub u tohohle repozitáře nespustil z cronu ani jeden běh, přestože obě
+# workflow byly aktivní, Actions povolené a cron platný — vyzkoušeno na */30
+# i na posunuté minuty. U čerstvě založených účtů GitHub plánované běhy omezuje
+# jako obranu proti zneužití Actions na těžbu.
+#
+# Ostrý provoz proto běží na vlastním serveru přes systemd timery, viz
+# deploy/install.sh. Zdrojem pravdy je databáze na serveru, ne větev data.
+# Ruční spuštění tady zůstává na ladění; pozor, že pracuje s vlastní kopií
+# stavu a může poslat upozornění, které už server odeslal.
 on:
-  schedule:
-    # Každou půlhodinu, ale schválně na "divné" minuty. Zápis */30 spouští běh
-    # přesně v celou a v půl, což jsou nejvytíženější okamžiky — GitHub tehdy
-    # naplánované běhy odsouvá a při zátěži i zahazuje. Posunutí o pár minut
-    # je doporučení přímo z jejich dokumentace.
-    - cron: "13,43 * * * *"
   workflow_dispatch:
     inputs:
       bootstrap:

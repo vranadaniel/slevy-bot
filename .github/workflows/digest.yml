@@ -44,8 +44,10 @@ jobs:
       - name: Uložit stav zpět na větev data
         run: |
           if [ ! -f data/deals.db ]; then exit 0; fi
-          git config user.name "deal-bot"
-          git config user.email "deal-bot@users.noreply.github.com"
+          # Identita musí být --global: commit probíhá v čerstvě založeném repu
+          # v /tmp/state, kam se lokální konfigurace z pracovní kopie nepřenese.
+          git config --global user.name "deal-bot"
+          git config --global user.email "deal-bot@users.noreply.github.com"
           rm -rf /tmp/state && mkdir -p /tmp/state/data
           cp data/deals.db /tmp/state/data/deals.db
           cd /tmp/state

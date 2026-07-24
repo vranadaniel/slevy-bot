@@ -95,7 +95,8 @@ def run_scan(cfg, args) -> int:
     verdicts = scorer.prescore(fresh)
 
     # AI soudce jen na to, co levné oracles neocenily a co vypadá slibně.
-    if cfg.judge_enabled and not args.no_ai:
+    # Při bootstrapu se stejně nic neodesílá, takže by to byly vyhozené peníze.
+    if cfg.judge_enabled and not args.no_ai and not args.bootstrap:
         judge = JudgeOracle(http, store, cfg)
         candidates = scorer.ai_candidates(verdicts, judge.max_items)
         if candidates:

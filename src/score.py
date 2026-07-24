@@ -59,8 +59,7 @@ class Scorer:
         self.digest_ratio = float(cfg.get("thresholds.digest_ratio", 0.20))
         self.min_cred_instant = float(cfg.get("thresholds.min_credibility_instant", 0.5))
         self.require_shipping = bool(cfg.get("thresholds.require_ships_to_cz_for_instant", True))
-        # Hry se posuzují proti historickému minimu, ne proti doporučené ceně.
-        self.itad_instant = float(cfg.get("itad.instant_factor", 0.7))
+        # Hry: ITAD sám okamžité upozornění nespouští, viz komentář v _finalize.
         self.itad_digest = float(cfg.get("itad.digest_factor", 1.0))
 
     # ---------- první průchod, bez AI ----------
@@ -155,21 +154,26 @@ class Scorer:
 
         # --- rozhodnutí o úrovni ---
         itad_low = offer.extra.get("itad_low_czk")
-        if itad_low:
-            # U her je doporučená cena mizerný rozlišovač — na šedém trhu jsou
-            # skoro všechny za pár procent. Zajímavé je jedině to, co je levnější,
-            # než kdy kde bylo.
-            qualifies_instant = offer.price_czk <= itad_low * self.itad_instant
-            qualifies_digest = offer.price_czk <= itad_low * self.itad_digest
-            shop = offer.extra.get("itad_shop")
-            if qualifies_instant:
+        if verdict.value.origin == "itad":
+            # Hry na šedém trhu neumí ITAD rozsoudit, a to ani jedním měřítkem.
+            # Poměr k doporučené ceně je u nich vždycky extrémní (2–5 %), ale
+            # levnější než historické minimum oficiálních obchodů je zhruba
+            # třetina nabídek — Kinguin prodává regionální klíče pod cenami,
+            # na které oficiální obchody nikdy nejdou. Obojí změřeno na živých
+            # datech: jako spouštěč to dávalo 43, resp. 153 zpráv v jednom běhu.
+            #
+            # Okamžité upozornění u her proto spouští až vlastní cenová historie,
+            # která šedý trh odráží. Do té doby slouží ITAD k zobrazení hodnoty
+            # a k utišení nabídek, které ani oficiální minimum nepodlezou.
+            qualifies_instant = False
+            qualifies_digest = bool(itad_low) and \
+                offer.price_czk <= itad_low * self.itad_digest
+            if qualifies_digest:
+                shop = offer.extra.get("itad_shop")
                 verdict.reasons.append(
-                    f"levnější než historické minimum "
+                    f"pod historickým minimem "
                     f"({itad_low:.0f} Kč{f' na {shop}' if shop else ''})"
                 )
-            elif not qualifies_digest:
-                verdict.level = NONE
-                return
         else:
             qualifies_instant = ratio <= self.instant_ratio
             qualifies_digest = ratio <= self.digest_ratio

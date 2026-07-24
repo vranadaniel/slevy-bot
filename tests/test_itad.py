@@ -171,35 +171,29 @@ class TestHistoricalLowGate:
         scorer.oracles.insert(0, oracle)
         return scorer.prescore([offer])[0]
 
-    def test_deal_that_was_once_cheaper_is_not_instant(self, setup):
-        """Jádro věci: proti doporučené ceně 1 500 Kč vypadá 60 Kč jako trhák,
-        ale hra už jinde byla za 40 Kč — takže to žádná zpráva není.
+    def test_itad_alone_never_triggers_instant(self, setup):
+        """Klíčové omezení, změřené na živých datech.
 
-        Poměr k doporučené ceně u her nerozlišuje nic; na šedém trhu jsou
-        skoro všechny za pár procent."""
-        from src.score import NONE
-        verdict = self._verdict(setup, price=60.0, low=40.0)
+        Kinguin prodává regionální klíče pod cenami, na které oficiální obchody
+        nikdy nejdou — zhruba třetina her je levnější než jejich historické
+        minimum. Jako spouštěč okamžité zprávy je tedy ITAD k ničemu: dával
+        153 "extrémů" v jediném běhu. Trhák u her pozná až vlastní historie.
+        """
+        from src.score import DIGEST
+        verdict = self._verdict(setup, price=5.0, low=40.0)
 
-        assert verdict.value_ratio == pytest.approx(0.04), "poměr by sám o sobě stačil"
-        assert verdict.level == NONE
+        assert verdict.value_ratio < 0.01, "proti doporučené ceně vypadá jako trhák"
+        assert verdict.level == DIGEST, "a přesto jen do souhrnu"
 
-    def test_new_all_time_low_is_instant(self, setup):
-        """Výrazně levnější, než to kdy kde bylo — to je zpráva."""
-        from src.score import INSTANT
-        verdict = self._verdict(setup, price=25.0, low=40.0)
-
-        assert verdict.level == INSTANT
-        assert any("historické minimum" in r for r in verdict.reasons)
-
-    def test_matching_the_low_only_reaches_digest(self, setup):
-        """Vyrovnání minima je hezké, ale na okamžité upozornění to nestačí."""
+    def test_below_official_low_reaches_digest(self, setup):
         from src.score import DIGEST
         verdict = self._verdict(setup, price=38.0, low=40.0)
 
         assert verdict.level == DIGEST
+        assert any("historickým minimem" in r for r in verdict.reasons)
 
     def test_ordinary_grey_market_price_is_silent(self, setup):
-        """300 Kč při minimu 120 Kč je běžná cena, ne nález."""
+        """300 Kč při oficiálním minimu 120 Kč je běžná cena, ne nález."""
         from src.score import NONE
         verdict = self._verdict(setup, price=300.0, low=120.0)
 

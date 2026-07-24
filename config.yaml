@@ -77,12 +77,14 @@ itad:
   max_lookup_per_run: 600
   max_lows_per_run: 600
 
-  # U her se o úrovni rozhoduje jinak než u zbytku katalogu.
-  # Hry se na šedém trhu běžně prodávají za 2–5 % doporučené ceny, takže poměr
-  # k doporučené ceně u nich nerozlišuje skoro nic — změřeno na živých datech:
-  # dával 43 "extrémních" nabídek v jediném běhu. Rozhoduje proto porovnání
-  # s historickým minimem napříč oficiálními obchody.
-  instant_factor: 0.7   # <= 70 % historického minima → pingne hned
+  # U her se o úrovni rozhoduje jinak než u zbytku katalogu — a hlavně: ITAD
+  # sám o sobě okamžité upozornění nespouští. Změřeno na živých datech:
+  #   * poměr k doporučené ceně  -> 43 "extrémních" nabídek v jednom běhu
+  #   * pod historickým minimem  -> 153 nabídek
+  # Kinguin prodává regionální klíče pod cenami, na které oficiální obchody
+  # nikdy nejdou, takže ani jedno měřítko nerozlišuje. Trhák u her pozná až
+  # vlastní cenová historie; ITAD slouží k zobrazení hodnoty a k utišení toho,
+  # co ani oficiální minimum nepodleze.
   digest_factor: 1.0    # <= historické minimum → do souhrnu
 
 judge:

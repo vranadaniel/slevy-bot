@@ -128,6 +128,30 @@ jediným commitem, takže repozitář nebobtná ani po roce provozu.
 
 ---
 
+## Plán běhů
+
+**GitHub nikde neukazuje, co a kdy poběží příště** — v Actions je jen historie a
+API žádné pole s příštím během nevystavuje. Jediný zdroj pravdy jsou soubory
+workflow, takže tady je jejich obsah:
+
+| Workflow | Cron (UTC) | Kdy to je u nás | Co dělá |
+|---|---|---|---|
+| [Sken slev](.github/workflows/scan.yml) | `13,43 * * * *` | v :13 a :43 každou hodinu | projde zdroje, pošle okamžitá upozornění |
+| [Denní souhrn](.github/workflows/digest.yml) | `9 17 * * *` | 19:09 letního času, 18:09 zimního | odešle nasbírané položky |
+
+Minuty jsou schválně „divné". Zápis `*/30` míří na celou a půl hodiny, tedy na
+špičku, kdy GitHub naplánované běhy odsouvá a při zátěži i zahazuje.
+
+Aktuální plán si kdykoliv ověříš přímo ze zdroje:
+
+```bash
+gh workflow view scan.yml --yaml --repo vranadaniel/slevy-bot
+```
+
+Jestli cron opravdu běží, poznáš podle toho, že v seznamu přibude položka
+s popiskem `Scheduled` místo `Manually run by`. Vyfiltruješ ji přes **Event →
+schedule**. Zpoždění 5–20 minut je normální; GitHub přesnost negarantuje.
+
 ## Příkazy
 
 ```bash

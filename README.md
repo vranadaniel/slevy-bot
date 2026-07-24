@@ -209,6 +209,11 @@ reálná hodnota a proč to skončilo tak, jak to skončilo.
 
 ## Ladění
 
+Prahy a ceník patří **do gitu**, ne na server — `install.sh` dělá
+`git reset --hard`, takže by se úpravy provedené na serveru při další
+aktualizaci ztratily. Postup je tedy vždycky: uprav doma, otestuj, pushni,
+na serveru spusť `install.sh`.
+
 Prahy jsou v `config.yaml`, kód se kvůli nim upravovat nemusí:
 
 ```yaml

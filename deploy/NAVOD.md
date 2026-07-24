@@ -181,13 +181,26 @@ journalctl -u slevy-scan -n 60 --no-pager
 
 **Chodí moc zpráv**
 
-Uprav prahy a restartuj — kód se načítá při každém běhu, takže stačí uložit:
+Prahy uprav **doma v repozitáři**, ne na serveru — `install.sh` dělá
+`git reset --hard`, takže by ti změny na serveru při další aktualizaci zmizely.
+
+Doma v `config.yaml` sniž `instant_ratio` z `0.05` třeba na `0.03`, pak:
 
 ```bash
-nano /opt/slevy-bot/config.yaml
+git commit -am "Zprisnit prah" && git push
 ```
 
-Sniž `instant_ratio` z `0.05` třeba na `0.03`.
+A na serveru:
+
+```bash
+bash /opt/slevy-bot/deploy/install.sh
+```
+
+Rychlá zkouška bez čekání na další běh:
+
+```bash
+systemctl start slevy-scan && journalctl -u slevy-scan -n 20 --no-pager
+```
 
 **Chci vidět souhrn hned**
 
@@ -213,9 +226,12 @@ systemctl disable --now slevy-scan.timer slevy-digest.timer
 
 ## Kde co leží
 
-| Cesta | Co to je |
-|---|---|
-| `/opt/slevy-bot` | kód, virtuální prostředí, konfigurace |
-| `/opt/slevy-bot/data/deals.db` | cenová historie a paměť odeslaných upozornění |
-| `/etc/slevy-bot/env` | tokeny, práva 600, čte jen root |
-| `journalctl -u slevy-scan` | logy |
+| Cesta | Co to je | Přežije aktualizaci? |
+|---|---|---|
+| `/opt/slevy-bot` | kód, virtuální prostředí, konfigurace | **ne** — přepíše se z gitu |
+| `/opt/slevy-bot/data/deals.db` | cenová historie a paměť odeslaných upozornění | ano |
+| `/etc/slevy-bot/env` | tokeny, práva 600, čte jen root | ano |
+| `journalctl -u slevy-scan` | logy | ano |
+
+Cokoliv, co chceš zachovat, patří buď do gitu (kód, prahy, ceník), nebo mimo
+adresář s kódem (databáze, tokeny).

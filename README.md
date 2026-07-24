@@ -113,6 +113,9 @@ python -m src.main --dry-run
 
 ### 3. Nasazení na server
 
+Podrobný návod krok za krokem včetně toho, kam na DigitalOcean kliknout, je
+v [deploy/NAVOD.md](deploy/NAVOD.md). Ve zkratce:
+
 Na Debianu nebo Ubuntu stačí jeden příkaz:
 
 ```bash

@@ -17,7 +17,7 @@ Dvě úrovně upozornění: **extrém pingne hned**, zbytek přijde večer jako 
 | **fly4free.com** | feed | letenky a hotely včetně error fare | není potřeba |
 
 Referenční ceny her doplňuje **IsThereAnyDeal** — free klíč z
-[isthereanydeal.com/dev/app/](https://isthereanydeal.com/dev/app/), bez něj bot běží dál,
+[isthereanydeal.com/apps/my/](https://isthereanydeal.com/apps/my/), bez něj bot běží dál,
 jen hry zůstanou neoceněné.
 
 Fyzické zboží ze zahraničních e-shopů projde jen tehdy, když obchod doručuje do ČR

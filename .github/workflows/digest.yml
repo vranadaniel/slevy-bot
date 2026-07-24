@@ -2,8 +2,9 @@ name: Denní souhrn
 
 on:
   schedule:
-    # 17:00 UTC = 19:00 v létě, 18:00 v zimě.
-    - cron: "0 17 * * *"
+    # 17:09 UTC = 19:09 v létě, 18:09 v zimě. Devět minut po celé schválně —
+    # v celou hodinu má GitHub špičku a naplánované běhy odsouvá.
+    - cron: "9 17 * * *"
   workflow_dispatch:
 
 concurrency:

@@ -2,9 +2,11 @@ name: Sken slev
 
 on:
   schedule:
-    # Každou půlhodinu. GitHub cron bývá zpožděný o jednotky až desítky minut
-    # a při zátěži běh občas vynechá — pro tenhle účel to nevadí.
-    - cron: "*/30 * * * *"
+    # Každou půlhodinu, ale schválně na "divné" minuty. Zápis */30 spouští běh
+    # přesně v celou a v půl, což jsou nejvytíženější okamžiky — GitHub tehdy
+    # naplánované běhy odsouvá a při zátěži i zahazuje. Posunutí o pár minut
+    # je doporučení přímo z jejich dokumentace.
+    - cron: "13,43 * * * *"
   workflow_dispatch:
     inputs:
       bootstrap:

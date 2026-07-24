@@ -22,6 +22,7 @@ from .net import build_http
 from .notify import Telegram, format_digest, format_instant, group_of
 from .oracles.declared import DeclaredOracle
 from .oracles.history import HistoryOracle
+from .oracles.itad import ItadOracle
 from .oracles.judge import JudgeOracle
 from .oracles.refs import ReferenceOracle
 from .score import DIGEST, INSTANT, Scorer
@@ -89,7 +90,18 @@ def run_scan(cfg, args) -> int:
 
     history = HistoryOracle(store)
     shipping = ShippingPolicy(cfg.merchants)
-    oracles = [history, ReferenceOracle(cfg.references), DeclaredOracle()]
+    oracles = [history, ReferenceOracle(cfg.references)]
+
+    if cfg.itad_enabled:
+        itad = ItadOracle(http, store, fx, cfg)
+        # Dávkové doplnění cache musí proběhnout před scoringem — jinak by se
+        # oracle ptal na každou hru zvlášť.
+        itad.prepare(fresh)
+        oracles.append(itad)
+    elif cfg.get("itad.enabled", False):
+        log.info("ITAD vypnutý (chybí ITAD_API_KEY), hry zůstanou bez ocenění")
+
+    oracles.append(DeclaredOracle())
     scorer = Scorer(cfg, store, oracles, history, shipping)
 
     verdicts = scorer.prescore(fresh)

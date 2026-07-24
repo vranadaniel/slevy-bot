@@ -16,6 +16,10 @@ Dvě úrovně upozornění: **extrém pingne hned**, zbytek přijde večer jako 
 | **Pepper** (mydealz.de, hotukdeals.com, dealabs.com, pepper.pl) | feed | elektronika, móda, cestování, cokoliv | není potřeba |
 | **fly4free.com** | feed | letenky a hotely včetně error fare | není potřeba |
 
+Referenční ceny her doplňuje **IsThereAnyDeal** — free klíč z
+[isthereanydeal.com/dev/app/](https://isthereanydeal.com/dev/app/), bez něj bot běží dál,
+jen hry zůstanou neoceněné.
+
 Fyzické zboží ze zahraničních e-shopů projde jen tehdy, když obchod doručuje do ČR
 (seznam v `merchants.yaml`). Letenky se filtrují na PRG, BRQ, PED, OSR, VIE a BTS.
 
@@ -26,12 +30,28 @@ Fyzické zboží ze zahraničních e-shopů projde jen tehdy, když obchod doru�
 Vše se sbíhá do jednoho čísla — **`value_ratio` = zaplatíš ÷ reálná hodnota**.
 Gemini za 65 Kč má poměr 0,007, tedy 0,7 % skutečné ceny.
 
-Reálnou hodnotu hledají čtyři „oracles" v pořadí od nejdůvěryhodnějšího:
+Reálnou hodnotu hledá pětice „oracles" v pořadí od nejdůvěryhodnějšího:
 
 1. **vlastní cenová historie** — nejsilnější, nikdo ji neovlivní, ale potřebuje pár dní
 2. **`references.yaml`** — ruční ceník, překlenuje studený start u předplatného
-3. **cena z příspěvku** — u Pepperu, kde ji píše komunita
-4. **AI soudce** — poslední instance pro položky, které nikdo jiný neocení
+3. **IsThereAnyDeal** — referenční ceny her napříč 50+ oficiálními obchody
+4. **cena z příspěvku** — u Pepperu, kde ji píše komunita
+5. **AI soudce** — poslední instance pro položky, které nikdo jiný neocení
+
+### Hry a historické minimum
+
+U her je doporučená cena mizerné měřítko — slevují se neustále. Hra s doporučenou
+cenou 1 500 Kč, která na každém výprodeji spadne na 120 Kč, **není trhák za 300 Kč**,
+i když to vypadá jako 80% sleva.
+
+Proto z ITAD bereme dvě čísla: doporučenou cenu jako hodnotu a **historické minimum
+jako bránu**. Co už někde bylo levnější, se jako okamžité upozornění nepošle, ať
+proti doporučené ceně vychází sleva jakkoliv velká. Projde jen to, co je levnější,
+než kdy kde bylo.
+
+Párování názvů řeší [`src/titles.py`](src/titles.py) — ITAD páruje přesnou shodou,
+takže „Gothic 1 Remake PC Steam CD Key" se sám netrefí. Změřeno na živých datech:
+**98 % her z katalogu se spáruje.**
 
 ### Proč nestačí procento slevy
 

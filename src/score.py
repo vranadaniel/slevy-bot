@@ -172,6 +172,19 @@ class Scorer:
                 verdict.level = DIGEST
                 verdict.reasons.append("nízká důvěryhodnost položky → jen do souhrnu")
                 return
+
+            # Brána na historické minimum z ITAD. U her je doporučená cena mizerné
+            # měřítko — slevují se pořád. Když už hra někde byla levnější, není to
+            # zpráva, i kdyby proti doporučené ceně vycházela sleva jakkoliv velká.
+            itad_low = offer.extra.get("itad_low_czk")
+            if itad_low and offer.price_czk > itad_low:
+                verdict.level = DIGEST
+                shop = offer.extra.get("itad_shop")
+                where = f" na {shop}" if shop else " jinde"
+                verdict.reasons.append(
+                    f"už bývala levnější{where} ({itad_low:.0f} Kč) → jen do souhrnu"
+                )
+                return
             if self.require_shipping and verdict.ships_to_cz is None:
                 verdict.level = DIGEST
                 verdict.reasons.append("doručení do ČR neověřeno → jen do souhrnu")

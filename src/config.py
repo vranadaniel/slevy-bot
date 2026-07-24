@@ -34,6 +34,7 @@ class Config:
         self.telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
         self.openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        self.itad_key = os.environ.get("ITAD_API_KEY", "").strip()
 
     def get(self, path: str, default: Any = None) -> Any:
         """Přístup přes tečkovou cestu, např. cfg.get("thresholds.instant_ratio")."""
@@ -56,6 +57,10 @@ class Config:
     @property
     def judge_enabled(self) -> bool:
         return bool(self.get("judge.enabled", False)) and bool(self.openrouter_key)
+
+    @property
+    def itad_enabled(self) -> bool:
+        return bool(self.get("itad.enabled", False)) and bool(self.itad_key)
 
 
 def load_config() -> Config:

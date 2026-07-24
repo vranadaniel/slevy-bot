@@ -71,6 +71,24 @@ CREATE TABLE IF NOT EXISTS meta (
     k TEXT PRIMARY KEY,
     v TEXT
 );
+
+-- IsThereAnyDeal: překlad názvu na ID hry. Trvalá cache, tituly se nemění.
+-- Uloženo i "nenalezeno" (game_id NULL), ať se marné dotazy neopakují.
+CREATE TABLE IF NOT EXISTS itad_titles (
+    title      TEXT PRIMARY KEY,
+    game_id    TEXT,
+    resolved_at TEXT NOT NULL
+);
+
+-- Historická minima. Cache s TTL, protože minima se občas posunou.
+CREATE TABLE IF NOT EXISTS itad_lows (
+    game_id     TEXT PRIMARY KEY,
+    low_czk     REAL,
+    regular_czk REAL,
+    shop        TEXT,
+    cut         INTEGER,
+    fetched_at  TEXT NOT NULL
+);
 """
 
 
@@ -300,6 +318,64 @@ class Store:
     def digest_size(self) -> int:
         row = self.conn.execute("SELECT COUNT(*) AS n FROM digest_queue").fetchone()
         return row["n"]
+
+    # ---------- IsThereAnyDeal cache ----------
+
+    def itad_known_titles(self, titles: list[str]) -> dict[str, str | None]:
+        """Vrátí jen tituly, které už máme vyřešené (i ty nenalezené)."""
+        if not titles:
+            return {}
+        out: dict[str, str | None] = {}
+        for i in range(0, len(titles), 400):
+            chunk = titles[i: i + 400]
+            marks = ",".join("?" * len(chunk))
+            rows = self.conn.execute(
+                f"SELECT title, game_id FROM itad_titles WHERE title IN ({marks})",
+                chunk,
+            ).fetchall()
+            out.update({r["title"]: r["game_id"] for r in rows})
+        return out
+
+    def itad_save_titles(self, mapping: dict[str, str | None]) -> None:
+        now = _now()
+        self.conn.executemany(
+            "INSERT INTO itad_titles (title, game_id, resolved_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(title) DO UPDATE SET "
+            "game_id = excluded.game_id, resolved_at = excluded.resolved_at",
+            [(title, gid, now) for title, gid in mapping.items()],
+        )
+
+    def itad_get_low(self, game_id: str, ttl_days: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT low_czk, regular_czk, shop, cut, fetched_at FROM itad_lows "
+            "WHERE game_id = ?",
+            (game_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            fetched = dt.datetime.fromisoformat(row["fetched_at"])
+        except ValueError:
+            return None
+        if (dt.datetime.now(dt.timezone.utc) - fetched).days >= ttl_days:
+            return None
+        return dict(row)
+
+    def itad_stale_game_ids(self, game_ids: list[str], ttl_days: int) -> list[str]:
+        """ID, která je potřeba (znovu) načíst — chybí v cache nebo jsou stará."""
+        return [gid for gid in game_ids if self.itad_get_low(gid, ttl_days) is None]
+
+    def itad_save_low(self, game_id: str, low_czk: float | None,
+                      regular_czk: float | None, shop: str | None,
+                      cut: int | None) -> None:
+        self.conn.execute(
+            "INSERT INTO itad_lows (game_id, low_czk, regular_czk, shop, cut, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(game_id) DO UPDATE SET "
+            "low_czk = excluded.low_czk, regular_czk = excluded.regular_czk, "
+            "shop = excluded.shop, cut = excluded.cut, fetched_at = excluded.fetched_at",
+            (game_id, low_czk, regular_czk, shop, cut, _now()),
+        )
 
     # ---------- údržba ----------
 

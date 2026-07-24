@@ -45,8 +45,9 @@ class Http:
     def get_json(self, url: str, **kwargs) -> dict:
         return self.get(url, **kwargs).json()
 
-    def post_json(self, url: str, payload: dict, headers: dict | None = None,
-                  timeout_s: int | None = None) -> dict:
+    def post_json(self, url: str, payload: dict | list, headers: dict | None = None,
+                  timeout_s: int | None = None):
+        """POST s JSON tělem. Tělo smí být i pole — ITAD tak bere dávky."""
         resp = self.session.post(
             url, json=payload, headers=headers or {},
             timeout=timeout_s or self.timeout_s,

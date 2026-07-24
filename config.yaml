@@ -65,6 +65,18 @@ dedup:
   realert_drop: 0.15
   realert_days: 30
 
+itad:
+  # IsThereAnyDeal — referenční ceny her. Bez klíče (ITAD_API_KEY) se přeskočí
+  # a hry zůstanou neoceněné, jinak nic nerozbije.
+  enabled: true
+  country: CZ
+  # Historická minima se hýbou pomalu, stačí je obnovovat jednou týdně.
+  low_ttl_days: 7
+  # Stropy na běh, ať se první průchod katalogem rozloží do víc běhů.
+  # Překlad názvů se cachuje natrvalo, takže po pár dnech je práce skoro nulová.
+  max_lookup_per_run: 600
+  max_lows_per_run: 600
+
 judge:
   enabled: true
   base_url: "https://openrouter.ai/api/v1/chat/completions"

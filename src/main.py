@@ -276,6 +276,56 @@ def report(verdicts, instant, digest) -> None:
         print()
 
 
+def run_check_itad(cfg) -> int:
+    """Ověří klíč k ITAD na jedné známé hře a ukáže, v jaké měně chodí ceny."""
+    if not cfg.itad_key:
+        print("Chybí ITAD_API_KEY v prostředí.")
+        return 1
+
+    http = build_http(cfg)
+    country = cfg.get("itad.country", "CZ")
+    headers = {"ITAD-API-Key": cfg.itad_key, "Content-Type": "application/json"}
+    print(f"Klíč načten ({len(cfg.itad_key)} znaků), ptám se na zemi {country}.\n")
+
+    try:
+        found = http.post_json(
+            "https://api.isthereanydeal.com/lookup/id/title/v1", ["Portal 2"], headers
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"Překlad názvu selhal: {exc}")
+        return 1
+
+    game_id = found.get("Portal 2")
+    if not game_id:
+        print("ITAD nezná ani 'Portal 2' — to je divné, zkus to za chvíli znovu.")
+        return 1
+    print(f"Překlad názvu OK: Portal 2 -> {game_id}")
+
+    try:
+        data = http.post_json(
+            f"https://api.isthereanydeal.com/games/historylow/v1?country={country}",
+            [game_id], headers,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"\nHistorické minimum SELHALO: {exc}")
+        print("\n'Invalid or expired api key' znamená, že klíč dorazil, ale ITAD ho nezná.")
+        print("Nejčastěji je to zaměněná hodnota — na stránce aplikace je vedle API klíče")
+        print("i OAuth Client ID a Client Secret. Potřebujeme API key.")
+        return 1
+
+    low = (data[0] if data else {}).get("low") or {}
+    price = low.get("price") or {}
+    regular = low.get("regular") or {}
+    print("\nHistorické minimum OK — klíč funguje.")
+    print(f"  nejníž  {price.get('amount')} {price.get('currency')}"
+          f"  ({(low.get('shop') or {}).get('name')})")
+    print(f"  běžně   {regular.get('amount')} {regular.get('currency')}")
+    if price.get("currency") and price["currency"] != "CZK":
+        print(f"\n  Pozor: ceny chodí v {price['currency']}, ne v CZK."
+              f" Bot je přepočítá kurzem ČNB.")
+    return 0
+
+
 def run_test_telegram(cfg) -> int:
     if not cfg.has_telegram:
         print("Chybí TELEGRAM_BOT_TOKEN nebo TELEGRAM_CHAT_ID v prostředí.")
@@ -329,6 +379,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-ai", action="store_true", help="vypne AI soudce")
     parser.add_argument("--test-telegram", action="store_true")
     parser.add_argument("--print-chat-id", action="store_true")
+    parser.add_argument("--check-itad", action="store_true",
+                        help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -342,6 +394,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.print_chat_id:
         return run_print_chat_id(cfg)
+    if args.check_itad:
+        return run_check_itad(cfg)
     if args.test_telegram:
         return run_test_telegram(cfg)
     if args.digest:

@@ -41,7 +41,8 @@ LOOKUP_CHUNK = 100     # názvů na jeden dotaz
 HISTORYLOW_CHUNK = 200  # tvrdý limit API
 
 # Typy produktů z Kinguinu, u kterých má smysl ptát se na hru.
-GAME_TYPES = {"GAME", "GAME_ACCOUNT", "DLC", "RANDOM_KEY", "GAME_GIFT"}
+# RANDOM_KEY schválně chybí: náhodný klíč nemá známý obsah, takže se nedá ocenit.
+GAME_TYPES = {"GAME", "GAME_ACCOUNT", "DLC", "GAME_GIFT"}
 
 
 class ItadOracle:

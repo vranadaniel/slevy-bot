@@ -60,6 +60,44 @@ class TestRegressions:
             "DOOM: The Dark Ages"
 
 
+class TestAddons:
+    """Přídavky se nikdy nesmí ocenit cenou základní hry.
+
+    Chyba odhalená až v ostrém provozu: 'EA Sports FC 24 - Pre-order Bonus DLC'
+    za 7 Kč se spárovalo se základní hrou a vyšlo jako sleva na 0,4 % ceny.
+    Bezcenný bonus tak vypadal jako největší trhák dne.
+    """
+
+    @pytest.mark.parametrize("raw", [
+        "EA Sports FC 24 - Pre-order Bonus DLC EA App CD Key",
+        "Starfield - Preorder Bonus DLC PC Steam CD Key",
+        "Call of Duty: Black Ops 6 - 10 Hours Double XP Boost DLC PC",
+        "Destiny 2 - The Witch Queen DLC RoW PC Steam CD Key",
+    ])
+    def test_addon_never_falls_back_to_base_game(self, raw):
+        result = candidates(raw)
+        assert len(result) <= 1, "přídavek nesmí nabízet víc variant"
+        if result:
+            assert " - " not in raw.split(" DLC")[0] or result[0] != raw.split(" - ")[0]
+
+    def test_addon_keeps_its_full_name(self):
+        """Hledá se přesně ten přídavek. Když ho ITAD nezná, neocení se vůbec."""
+        assert candidates("Destiny 2 - The Witch Queen DLC RoW PC Steam CD Key") == \
+            ["Destiny 2 - The Witch Queen DLC"]
+
+    def test_base_game_still_shortens_normally(self):
+        assert candidates("Gothic 1 Remake PC Steam CD Key")[0] == "Gothic 1 Remake"
+
+    @pytest.mark.parametrize("raw", [
+        "Mystery PC Steam CD Key",
+        "5 x VR Mystery Steam CD Key",
+        "Random Premium Steam Key",
+    ])
+    def test_mystery_keys_are_not_valuable(self, raw):
+        """Náhodný klíč nemá známý obsah, takže mu nelze přiřadit hodnotu."""
+        assert candidates(raw) == []
+
+
 class TestVariants:
     def test_edition_stripped_as_fallback(self):
         """Základní hra je levnější, takže se nabídka spíš podhodnotí.

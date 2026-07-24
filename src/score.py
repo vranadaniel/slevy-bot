@@ -59,6 +59,9 @@ class Scorer:
         self.digest_ratio = float(cfg.get("thresholds.digest_ratio", 0.20))
         self.min_cred_instant = float(cfg.get("thresholds.min_credibility_instant", 0.5))
         self.require_shipping = bool(cfg.get("thresholds.require_ships_to_cz_for_instant", True))
+        # Hry se posuzují proti historickému minimu, ne proti doporučené ceně.
+        self.itad_instant = float(cfg.get("itad.instant_factor", 0.7))
+        self.itad_digest = float(cfg.get("itad.digest_factor", 1.0))
 
     # ---------- první průchod, bez AI ----------
 
@@ -150,15 +153,33 @@ class Scorer:
         if months and months > 1:
             verdict.reasons.append(f"{offer.price_czk / months:.0f} Kč za měsíc")
 
-        # --- okamžité upozornění ---
-        qualifies_instant = ratio <= self.instant_ratio
+        # --- rozhodnutí o úrovni ---
+        itad_low = offer.extra.get("itad_low_czk")
+        if itad_low:
+            # U her je doporučená cena mizerný rozlišovač — na šedém trhu jsou
+            # skoro všechny za pár procent. Zajímavé je jedině to, co je levnější,
+            # než kdy kde bylo.
+            qualifies_instant = offer.price_czk <= itad_low * self.itad_instant
+            qualifies_digest = offer.price_czk <= itad_low * self.itad_digest
+            shop = offer.extra.get("itad_shop")
+            if qualifies_instant:
+                verdict.reasons.append(
+                    f"levnější než historické minimum "
+                    f"({itad_low:.0f} Kč{f' na {shop}' if shop else ''})"
+                )
+            elif not qualifies_digest:
+                verdict.level = NONE
+                return
+        else:
+            qualifies_instant = ratio <= self.instant_ratio
+            qualifies_digest = ratio <= self.digest_ratio
 
-        # Vlastní historie je natolik důvěryhodná, že hluboký propad na historické
-        # minimum stojí za okamžitou zprávu i bez extrémního poměru.
-        if (not qualifies_instant and verdict.all_time_low
-                and verdict.value.origin == "history" and ratio <= 0.5):
-            qualifies_instant = True
-            verdict.reasons.append("propad na historické minimum")
+            # Vlastní historie je natolik důvěryhodná, že hluboký propad na
+            # historické minimum stojí za okamžitou zprávu i bez extrémního poměru.
+            if (not qualifies_instant and verdict.all_time_low
+                    and verdict.value.origin == "history" and ratio <= 0.5):
+                qualifies_instant = True
+                verdict.reasons.append("propad na historické minimum")
 
         if qualifies_instant:
             # Práh důvěryhodnosti hlídá nedůvěryhodné OCENĚNÍ, ne položku samotnou.
@@ -173,18 +194,6 @@ class Scorer:
                 verdict.reasons.append("nízká důvěryhodnost položky → jen do souhrnu")
                 return
 
-            # Brána na historické minimum z ITAD. U her je doporučená cena mizerné
-            # měřítko — slevují se pořád. Když už hra někde byla levnější, není to
-            # zpráva, i kdyby proti doporučené ceně vycházela sleva jakkoliv velká.
-            itad_low = offer.extra.get("itad_low_czk")
-            if itad_low and offer.price_czk > itad_low:
-                verdict.level = DIGEST
-                shop = offer.extra.get("itad_shop")
-                where = f" na {shop}" if shop else " jinde"
-                verdict.reasons.append(
-                    f"už bývala levnější{where} ({itad_low:.0f} Kč) → jen do souhrnu"
-                )
-                return
             if self.require_shipping and verdict.ships_to_cz is None:
                 verdict.level = DIGEST
                 verdict.reasons.append("doručení do ČR neověřeno → jen do souhrnu")
@@ -192,4 +201,4 @@ class Scorer:
             verdict.level = INSTANT
             return
 
-        verdict.level = DIGEST if ratio <= self.digest_ratio else NONE
+        verdict.level = DIGEST if qualifies_digest else NONE

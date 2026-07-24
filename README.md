@@ -38,16 +38,26 @@ Reálnou hodnotu hledá pětice „oracles" v pořadí od nejdůvěryhodnější
 4. **cena z příspěvku** — u Pepperu, kde ji píše komunita
 5. **AI soudce** — poslední instance pro položky, které nikdo jiný neocení
 
-### Hry a historické minimum
+### Hry: proč ITAD nespouští okamžitá upozornění
 
-U her je doporučená cena mizerné měřítko — slevují se neustále. Hra s doporučenou
-cenou 1 500 Kč, která na každém výprodeji spadne na 120 Kč, **není trhák za 300 Kč**,
-i když to vypadá jako 80% sleva.
+U her je doporučená cena mizerné měřítko — slevují se neustále. Nabízelo by se
+tedy porovnávat s historickým minimem napříč oficiálními obchody. **Měření na
+živých datech ale ukázalo, že ani to nefunguje:**
 
-Proto z ITAD bereme dvě čísla: doporučenou cenu jako hodnotu a **historické minimum
-jako bránu**. Co už někde bylo levnější, se jako okamžité upozornění nepošle, ať
-proti doporučené ceně vychází sleva jakkoliv velká. Projde jen to, co je levnější,
-než kdy kde bylo.
+| měřítko | „extrémních" nabídek v jednom běhu |
+|---|---|
+| poměr k doporučené ceně | 43 |
+| pod historickým minimem | 153 |
+| vlastní cenová historie | 9 |
+
+Důvod je v povaze šedého trhu. Kinguin prodává regionální a jinak získané klíče
+pod cenami, na které oficiální obchody nikdy nejdou — **levnější než historické
+minimum je zhruba třetina her**. Není to tedy výjimka, ale pravidlo, a jako
+spouštěč to nemá cenu.
+
+Okamžité upozornění u her proto spouští až **vlastní cenová historie**, jediná,
+která šedý trh odráží. ITAD slouží ke dvěma věcem: dodá hodnotu pro zobrazení
+a utiší nabídky, které ani oficiální minimum nepodlezou.
 
 Párování názvů řeší [`src/titles.py`](src/titles.py) — ITAD páruje přesnou shodou,
 takže „Gothic 1 Remake PC Steam CD Key" se sám netrefí. Změřeno na živých datech:

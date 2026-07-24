@@ -1,0 +1,57 @@
+name: Denní souhrn
+
+on:
+  schedule:
+    # 17:00 UTC = 19:00 v létě, 18:00 v zimě.
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scan          # ať se nepotká se skenem nad stejným stavem
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stáhnout stav z větve data
+        run: |
+          mkdir -p data
+          if git fetch origin data:data 2>/dev/null; then
+            git show data:data/deals.db > data/deals.db 2>/dev/null || true
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Odeslat souhrn
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.main --digest
+
+      - name: Uložit stav zpět na větev data
+        run: |
+          if [ ! -f data/deals.db ]; then exit 0; fi
+          git config user.name "deal-bot"
+          git config user.email "deal-bot@users.noreply.github.com"
+          rm -rf /tmp/state && mkdir -p /tmp/state/data
+          cp data/deals.db /tmp/state/data/deals.db
+          cd /tmp/state
+          git init -q
+          git checkout -q -b data
+          git add data/deals.db
+          git commit -q -m "stav po souhrnu $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push -q --force origin data

@@ -1,0 +1,120 @@
+# Doručuje obchod do ČR?
+#
+# Pepper feedy jsou německé, britské, francouzské a polské. Fyzické zboží má smysl
+# jen když e-shop pošle do ČR. Klíč se hledá jako podřetězec v názvu obchodu
+# (lowercase), takže "amazon" pokryje i "Amazon.de" a "Amazon Marketplace".
+#
+# Co tu není, je "neznámo" -> položka nikdy nejde jako INSTANT, spadne do souhrnu
+# s poznámkou. AI soudce pak může odhad doplnit.
+
+# Digitální zboží — doprava je nesmysl, vždycky projde.
+digital_merchants:
+  - steam
+  - kinguin
+  - eneba
+  - gamivo
+  - g2a
+  - instant gaming
+  - humble
+  - gog
+  - fanatical
+  - green man gaming
+  - microsoft
+  - xbox
+  - playstation
+  - nintendo
+  - epic games
+  - google
+  - apple
+  - spotify
+  - netflix
+  - youtube
+  - openai
+  - anthropic
+  - adobe
+
+# Kategorie, které jsou svou povahou digitální nebo služba (doprava se neřeší).
+digital_categories:
+  - gaming
+  - games
+  - spiele
+  - software
+  - apps
+  - handy
+  - tarife
+  - dsl
+  - urlaub
+  - reisen
+  - travel
+  - flight
+
+ships_to_cz:
+  # --- posílají do ČR ---
+  amazon: true
+  zalando: true
+  about you: true
+  aboutyou: true
+  asos: true
+  nike: true
+  adidas: true
+  puma: true
+  decathlon: true
+  ikea: true
+  alternate: true
+  galaxus: true
+  notino: true
+  douglas: true
+  bershka: true
+  zara: true
+  h&m: true
+  hm.com: true
+  reserved: true
+  answear: true
+  footshop: true
+  aliexpress: true
+  temu: true
+  ebay: true
+  bol.com: true
+  jysk: true
+  tchibo: true
+  lego: true
+  proshop: true
+  mindfactory: true
+  reichelt: true
+  conrad: true
+  banggood: true
+  geekbuying: true
+
+  # --- neposílají do ČR (nebo jen do vlastní země) ---
+  mediamarkt: false
+  saturn: false
+  otto: false
+  lidl: false
+  aldi: false
+  kaufland: false
+  rewe: false
+  penny: false
+  dm: false
+  rossmann: false
+  coolblue: false
+  cyberport: false
+  notebooksbilliger: false
+  expert: false
+  euronics: false
+  argos: false
+  currys: false
+  tesco: false
+  sainsbury: false
+  boots: false
+  screwfix: false
+  carrefour: false
+  fnac: false
+  darty: false
+  leclerc: false
+  intermarche: false
+  biedronka: false
+  allegro: false
+  media expert: false
+  x-kom: false
+  morele: false
+  rtv euro agd: false

@@ -1,0 +1,76 @@
+name: Sken slev
+
+on:
+  schedule:
+    # Každou půlhodinu. GitHub cron bývá zpožděný o jednotky až desítky minut
+    # a při zátěži běh občas vynechá — pro tenhle účel to nevadí.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: "Bootstrap: označit feedy za viděné a nic neposílat"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: jen vypsat, nic neodesílat"
+        type: boolean
+        default: false
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stáhnout stav z větve data
+        # Stav žije na oddělené orphan větvi a přepisuje se jediným commitem.
+        # Běžný commit každou půlhodinu by z repozitáře udělal stovky megabajtů.
+        run: |
+          mkdir -p data
+          if git fetch origin data:data 2>/dev/null; then
+            git show data:data/deals.db > data/deals.db 2>/dev/null || true
+          fi
+          ls -la data/ || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Sken
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.bootstrap }}" = "true" ]; then ARGS="--bootstrap"; fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="--dry-run"; fi
+          python -m src.main $ARGS
+
+      - name: Uložit stav zpět na větev data
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          if [ ! -f data/deals.db ]; then echo "Není co ukládat"; exit 0; fi
+          git config user.name "deal-bot"
+          git config user.email "deal-bot@users.noreply.github.com"
+          rm -rf /tmp/state && mkdir -p /tmp/state/data
+          cp data/deals.db /tmp/state/data/deals.db
+          cd /tmp/state
+          git init -q
+          git checkout -q -b data
+          git add data/deals.db
+          git commit -q -m "stav $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push -q --force origin data

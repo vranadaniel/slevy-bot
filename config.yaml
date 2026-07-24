@@ -1,0 +1,79 @@
+# Konfigurace bota na lov extrémních slev.
+# Prahy se ladí tady, ne v kódu.
+
+db_path: data/deals.db
+
+http:
+  timeout_s: 25
+  retries: 3
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+sources:
+  kinguin:
+    enabled: true
+    # 50 stran x 100 = 5000 nejprodávanějších položek, ~50 requestů
+    pages: 50
+    page_size: 100
+    delay_s: 0.3
+    country: CZ
+
+  pepper:
+    enabled: true
+    delay_s: 0.5
+    # Číslo v titulku je komunitní teplota dealu. Pod tuhle hranici se položka
+    # ani nenačítá do scoringu — je to hlavní obrana proti braku u feedů.
+    # Změřeno na živých datech: 100° dá ~113 nabídek na běh a z toho 15 s dohledatelnou
+    # původní cenou; 150° jich dá 62 a jen 5. Nižší práh tedy platí lepším pokrytím,
+    # ne šumem — o tom, co se pošle, stejně rozhodují až prahy slevy níž.
+    min_temperature: 100
+    sites:
+      - {name: mydealz,    domain: www.mydealz.de,     currency: EUR, feeds: [hot, new]}
+      - {name: hotukdeals, domain: www.hotukdeals.com, currency: GBP, feeds: [hot]}
+      - {name: dealabs,    domain: www.dealabs.com,    currency: EUR, feeds: [hot]}
+      - {name: pepperpl,   domain: www.pepper.pl,      currency: PLN, feeds: [hot, new]}
+
+  fly4free:
+    enabled: true
+    delay_s: 0.5
+    # Error-fare feedy jsou z velké části archiv z let 2020–2021. Bez filtru stáří
+    # by první běh poslal šest let staré nabídky.
+    max_age_days: 7
+    feeds:
+      - {url: "https://www.fly4free.com/feed/", error_fare: false}
+      - {url: "https://www.fly4free.com/flight-deals/error-fare/feed/", error_fare: true}
+      - {url: "https://www.fly4free.com/flight-deals/mistake-fare/feed/", error_fare: true}
+    # Odletová letiště. Položka projde, když se některý z výrazů objeví
+    # v kategoriích nebo titulku. Německá a polská letiště jsou záměrně vynechaná.
+    airports:
+      - {code: PRG, terms: [prague, praha, prag]}
+      - {code: BRQ, terms: [brno]}
+      - {code: PED, terms: [pardubice]}
+      - {code: OSR, terms: [ostrava]}
+      - {code: VIE, terms: [vienna, wien, viedeň]}
+      - {code: BTS, terms: [bratislava]}
+
+thresholds:
+  # Rozhoduje jen procento slevy, absolutní cenový strop není.
+  instant_ratio: 0.05          # <= 5 % reálné hodnoty -> pingne hned
+  digest_ratio: 0.20           # <= 20 % -> do denního souhrnu
+  min_credibility_instant: 0.5 # nízká důvěryhodnost nikdy nejde jako INSTANT
+  # Fyzické zboží z ciziny bez potvrzeného doručení do ČR nikdy nejde jako INSTANT.
+  require_ships_to_cz_for_instant: true
+
+dedup:
+  # Katalog: znovu upozornit až při dalším poklesu o tolik pod naposled oznámenou cenu.
+  realert_drop: 0.15
+  realert_days: 30
+
+judge:
+  enabled: true
+  base_url: "https://openrouter.ai/api/v1/chat/completions"
+  model: "google/gemini-2.5-flash-lite"
+  max_items_per_call: 25
+  max_calls_per_day: 20
+  timeout_s: 60
+
+telegram:
+  # Kolik položek nejvýš pošle jeden běh jako instant, aby tě bot nezasypal.
+  max_instant_per_run: 8
+  max_digest_items: 25

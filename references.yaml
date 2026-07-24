@@ -1,0 +1,78 @@
+# Ruční ceník reálných hodnot.
+#
+# Překlenuje studený start (než se nasbírá vlastní cenová historie) a řeší položky,
+# kde žádná cenová databáze neexistuje — hlavně předplatné.
+#
+# Pravidlo se použije, když jsou VŠECHNY výrazy z `match` obsaženy v názvu položky
+# (case-insensitive). Řadí se od nejkonkrétnějšího; vyhrává první shoda.
+#
+# value_czk_per_month  -> hodnota se násobí počtem měsíců vyčteným z názvu
+# value_czk            -> jednorázová hodnota
+#
+# Tenhle soubor si klidně rozšiřuj. Čím víc pravidel, tím míň práce pro AI soudce.
+
+# --- AI předplatné ---
+- match: ["gemini", "ultra"]
+  value_czk_per_month: 6000
+- match: ["gemini", "ai pro"]
+  value_czk_per_month: 490
+- match: ["google ai", "pro"]
+  value_czk_per_month: 490
+- match: ["google one", "ai premium"]
+  value_czk_per_month: 490
+- match: ["chatgpt", "pro"]
+  value_czk_per_month: 4800
+- match: ["chatgpt", "plus"]
+  value_czk_per_month: 500
+- match: ["claude", "max"]
+  value_czk_per_month: 2400
+- match: ["claude", "pro"]
+  value_czk_per_month: 500
+- match: ["perplexity", "pro"]
+  value_czk_per_month: 500
+- match: ["supergrok"]
+  value_czk_per_month: 700
+- match: ["grok", "premium"]
+  value_czk_per_month: 400
+- match: ["github", "copilot"]
+  value_czk_per_month: 250
+
+# --- Streaming a média ---
+- match: ["youtube", "premium"]
+  value_czk_per_month: 179
+- match: ["spotify", "premium"]
+  value_czk_per_month: 199
+- match: ["netflix"]
+  value_czk_per_month: 279
+- match: ["disney"]
+  value_czk_per_month: 199
+- match: ["hbo max"]
+  value_czk_per_month: 199
+
+# --- Cloud a nástroje ---
+- match: ["google one"]
+  value_czk_per_month: 60
+- match: ["icloud"]
+  value_czk_per_month: 79
+- match: ["nordvpn"]
+  value_czk_per_month: 300
+- match: ["adobe", "creative cloud"]
+  value_czk_per_month: 1600
+- match: ["canva", "pro"]
+  value_czk_per_month: 300
+
+# --- Software s jednorázovou licencí ---
+- match: ["windows 11 pro"]
+  value_czk: 4500
+- match: ["windows 11 home"]
+  value_czk: 3500
+- match: ["windows 10 pro"]
+  value_czk: 4500
+- match: ["office 2021", "professional"]
+  value_czk: 11000
+- match: ["office 2021"]
+  value_czk: 4500
+- match: ["office 2024"]
+  value_czk: 5000
+- match: ["microsoft 365"]
+  value_czk_per_month: 250

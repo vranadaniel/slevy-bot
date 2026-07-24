@@ -52,8 +52,21 @@ class Http:
             url, json=payload, headers=headers or {},
             timeout=timeout_s or self.timeout_s,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            raise RuntimeError(_describe_error(resp))
         return resp.json()
+
+
+def _describe_error(resp) -> str:
+    """Chybová hláška včetně těla odpovědi.
+
+    Samotné "403 Client Error" neřekne nic o příčině; API obvykle důvod píše
+    v těle. URL se ořezává o query string, aby se do logu nedostal klíč
+    předaný parametrem.
+    """
+    url = resp.url.split("?")[0]
+    body = (resp.text or "").strip().replace("\n", " ")[:300]
+    return f"HTTP {resp.status_code} z {url}" + (f" — {body}" if body else "")
 
 
 def build_http(cfg) -> Http:

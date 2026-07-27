@@ -48,6 +48,18 @@ sources:
     # Necháváme je tam — jsou to jediná data o těchhle letištích, jaká máme.
     airports: [PRG, BRQ, OSR, VIE, BTS]
 
+  # Wizz Air — druhý katalogový zdroj. Doplňuje Ryanair: z Vídně nelétá,
+  # zato z Bratislavy má 38 tras. Ceny vrací po dnech, rovnou v korunách.
+  wizzair:
+    enabled: true
+    delay_s: 0.6
+    days_ahead: 45
+    # Zeptat se na všech 58 tras při každém běhu by znamenalo přes osm tisíc
+    # požadavků denně. Trasy se proto mezi běhy střídají — celý seznam se
+    # projde za pár hodin, což u ceny letenky bohatě stačí.
+    routes_per_run: 12
+    airports: [PRG, BRQ, OSR, PED, VIE, BTS]
+
   # Cestování: letenky, hotely a zájezdy. Jeden parser na všechny weby.
   travel:
     enabled: true

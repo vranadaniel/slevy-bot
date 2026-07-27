@@ -198,6 +198,21 @@ se historie nikdy nenasbírala. Parametr `limit` API odmítá s `InvalidLimit`
 bez ohledu na hodnotu, bez něj vrátí kolem 32 tras na letiště. Pardubice
 neobsluhuje, Brno a Ostrava mají po třech trasách.
 
+**Wizz Air** (`sources/wizzair.py`) — druhý katalogový zdroj, doplňuje Ryanair:
+z Vídně nelétá, zato z Bratislavy má 38 tras (Praha 20). Tři věci, bez kterých
+to nefunguje a na které se přijde jen měřením:
+
+* **Cookies se musí před každým dotazem zahodit.** Server přiloží
+  `RequestVerificationToken` a u dalšího dotazu ho chce zpátky v hlavičce,
+  jinak vrátí `InvalidProtocol`. Bez toho projde z celé dávky **jen první
+  trasa** a zbytek tiše propadne — chyba, která se tváří jako prázdný zdroj.
+* `dayInterval` musí být **aspoň 3**, jinak validace odmítne dotaz.
+* Verze API je v cestě (`be.wizzair.com/29.8.0/…`) a zvedá se; zjišťuje se
+  z jejich webu, ne z konfigurace.
+
+Trasy se mezi běhy **střídají** (`routes_per_run`). Zeptat se na všech 58
+každých deset minut by bylo přes osm tisíc požadavků denně.
+
 **Cestování** (`sources/travel.py`) — RSS, jeden parser na všechny weby.
 `travelfree.info` je nejsilnější zdroj pro střední Evropu (25 položek, nové
 příspěvky každou půlhodinu) a podporuje tagové feedy pro jednotlivá města;

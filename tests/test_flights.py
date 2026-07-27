@@ -215,3 +215,116 @@ class TestRyanairSource:
         offer = source.fetch()[0]
 
         assert FlightOracle(load_config().flights).value_of(offer) is None
+
+
+class TestWizzAirSource:
+    """Druhý katalogový zdroj. Doplňuje Ryanair — z Vídně nelétá, zato
+    z Bratislavy má 38 tras."""
+
+    class FakeSession:
+        def __init__(self):
+            self.cookies = self
+            self.cleared = 0
+
+        def clear(self):
+            self.cleared += 1
+
+    class FakeHttp:
+        def __init__(self, mapa, ceny, session=None):
+            self.mapa = mapa
+            self.ceny = ceny
+            self.session = session
+            self.posty: list[dict] = []
+
+        def get(self, url, **kw):
+            class R:
+                text = 'src="https://be.wizzair.com/29.8.0/x.js"'
+            return R()
+
+        def get_json(self, url, **kw):
+            return self.mapa
+
+        def post_json(self, url, payload, headers=None, timeout_s=None):
+            self.posty.append(payload)
+            return self.ceny
+
+    class FakeFx:
+        def to_czk(self, amount, currency):
+            return amount
+
+    def _mapa(self):
+        return {"cities": [
+            {"iata": "PRG", "connections": [{"iata": "LTN"}, {"iata": "BCN"}]},
+            {"iata": "BTS", "connections": [{"iata": "AGP"}]},
+            {"iata": "BUD", "connections": [{"iata": "LTN"}]},   # cizí letiště
+        ]}
+
+    def _ceny(self):
+        return {"outboundFlights": [
+            {"date": "2026-09-11", "price": {"amount": 1169.0, "currencyCode": "CZK"}},
+            {"date": "2026-09-12", "price": {"amount": 759.0, "currencyCode": "CZK"}},
+        ]}
+
+    def _source(self, session=None, routes_per_run=10):
+        from src.sources.wizzair import WizzAirSource
+
+        cfg = load_config()
+        cfg.raw["sources"]["wizzair"]["delay_s"] = 0
+        cfg.raw["sources"]["wizzair"]["routes_per_run"] = routes_per_run
+        http = self.FakeHttp(self._mapa(), self._ceny(), session)
+        return WizzAirSource(http, self.FakeFx(), cfg), http
+
+    def test_only_our_airports_are_used(self):
+        source, _ = self._source()
+        assert source.routes() == [("BTS", "AGP"), ("PRG", "BCN"), ("PRG", "LTN")]
+
+    def test_cheapest_day_in_the_window_wins(self):
+        """Historie má sledovat dosažitelné minimum na trase — to je to,
+        co člověk hledá, když se dívá po levné letence."""
+        source, _ = self._source()
+        offer = next(o for o in source.fetch() if o.uid == "PRG-LTN")
+
+        assert offer.price_czk == pytest.approx(759.0)
+        assert offer.extra["outbound"] == "2026-09-12"
+
+    def test_cookies_are_dropped_before_every_request(self):
+        """Server přiloží RequestVerificationToken a u dalšího dotazu ho chce
+        zpátky. Bez zahození projde z dávky jen první trasa."""
+        session = self.FakeSession()
+        source, http = self._source(session=session)
+        source.fetch()
+
+        assert session.cleared == len(http.posty) == 3
+
+    def test_routes_rotate_between_runs(self, tmp_path):
+        """58 tras při každém běhu by bylo přes osm tisíc požadavků denně."""
+        from src.store import Store
+
+        store = Store(tmp_path / "w.db")
+        source, http = self._source(routes_per_run=2)
+        source.store = store
+        source.fetch()
+        prvni = [tuple(p["flightList"][0].values())[:2] for p in http.posty]
+
+        source2, http2 = self._source(routes_per_run=2)
+        source2.store = store
+        source2.fetch()
+        druhy = [tuple(p["flightList"][0].values())[:2] for p in http2.posty]
+        store.close()
+
+        assert len(prvni) == 2
+        assert prvni != druhy, "druhý běh má pokračovat, ne opakovat totéž"
+
+    def test_broken_map_does_not_kill_the_run(self):
+        from src.sources.wizzair import WizzAirSource
+
+        class Broken:
+            session = None
+
+            def get(self, *a, **kw):
+                raise RuntimeError("web nedostupný")
+
+            def get_json(self, *a, **kw):
+                raise RuntimeError("mapa nedostupná")
+
+        assert WizzAirSource(Broken(), self.FakeFx(), load_config()).fetch() == []

@@ -380,11 +380,12 @@ class TestBuildSources:
         taky, i když je to katalog a ne feed."""
         from src.main import build_sources
         from src.sources.ryanair import RyanairSource
+        from src.sources.wizzair import WizzAirSource
 
         sources = build_sources(FakeHttp([]), FakeFx(), Config(), only="travel")
         types = {type(s) for s in sources}
 
-        assert types == {TravelSource, RyanairSource}
+        assert types == {TravelSource, RyanairSource, WizzAirSource}
 
     def test_unknown_family_fails_loudly(self):
         from src.main import build_sources

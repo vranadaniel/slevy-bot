@@ -52,9 +52,11 @@ ERROR_FARE_CREDIBILITY = 0.95
 class TravelSource:
     kind = FEED
 
-    def __init__(self, http, fx, cfg, site: dict) -> None:
+    def __init__(self, http, fx, cfg, site: dict, store=None) -> None:
         self.http = http
         self.fx = fx
+        # Bez store se jen vypne podmíněné stahování, jinak nic nemění.
+        self.store = store
         self.name = site["name"]
         self.feeds: list[dict] = site.get("feeds", []) or []
         self.credibility = float(site.get("credibility", 0.8))
@@ -70,9 +72,11 @@ class TravelSource:
         for feed in self.feeds:
             url = feed["url"]
             try:
-                root = ET.fromstring(self.http.get(url).content)
+                root = self._load(url)
             except Exception as exc:  # noqa: BLE001 — jeden feed neshodí zdroj
                 log.warning("%s: feed %s selhal: %s", self.name, url, exc)
+                continue
+            if root is None:      # 304, feed se od minule nezměnil
                 continue
 
             for item in root.findall(".//item"):
@@ -86,6 +90,38 @@ class TravelSource:
 
         log.info("%s: %s nabídek", self.name, len(offers))
         return list(offers.values())
+
+    def _load(self, url: str) -> ET.Element | None:
+        """Stáhne feed. Vrátí `None`, když se od minule nezměnil.
+
+        Bez tohohle by rychlý sken tahal zbytečně velká data: hlavní feed
+        travelfree.info měří 14 MB a tagový 5 MB, takže při běhu každých deset
+        minut jde o zhruba 3,5 GB denně. Server na podmíněný dotaz odpoví
+        `304` s prázdným tělem — ověřeno, travelfree.info to umí.
+
+        Nevýhoda: položka, kterou se minule nepodařilo ocenit, se znovu nabídne
+        až s další změnou feedu. U zdroje, který přispívá každou půlhodinu, je
+        to zdržení v řádu minut.
+        """
+        headers = {}
+        if self.store is not None:
+            for header, key in (("If-None-Match", "etag"),
+                                ("If-Modified-Since", "modified")):
+                cached = self.store.get_meta(f"feed:{key}:{url}")
+                if cached:
+                    headers[header] = cached
+
+        resp = self.http.get(url, headers=headers) if headers else self.http.get(url)
+        if resp.status_code == 304:
+            log.debug("%s: %s beze změny", self.name, url)
+            return None
+
+        if self.store is not None:
+            for header, key in (("ETag", "etag"), ("Last-Modified", "modified")):
+                if resp.headers.get(header):
+                    self.store.set_meta(f"feed:{key}:{url}", resp.headers[header])
+
+        return ET.fromstring(resp.content)
 
     def _to_offer(self, item: ET.Element, feed: dict) -> Offer | None:
         title = (item.findtext("title") or "").strip()
@@ -183,6 +219,6 @@ def _region(item: ET.Element) -> str | None:
     return None
 
 
-def build_travel_sources(http, fx, cfg) -> list[TravelSource]:
+def build_travel_sources(http, fx, cfg, store=None) -> list[TravelSource]:
     sites = cfg.get("sources.travel.sites", []) or []
-    return [TravelSource(http, fx, cfg, site) for site in sites]
+    return [TravelSource(http, fx, cfg, site, store) for site in sites]

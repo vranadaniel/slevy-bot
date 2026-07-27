@@ -38,7 +38,7 @@ from .store import Store
 log = logging.getLogger("slevy")
 
 
-def build_sources(http, fx, cfg, only: str | None = None) -> list:
+def build_sources(http, fx, cfg, only: str | None = None, store=None) -> list:
     """Zdroje k projití. `only` omezí běh na jednu rodinu zdrojů.
 
     Cestovatelské feedy se vyplatí číst častěji než katalog — error fare mizí
@@ -48,7 +48,7 @@ def build_sources(http, fx, cfg, only: str | None = None) -> list:
     families = {
         "kinguin": lambda: [KinguinSource(http, fx, cfg)],
         "pepper": lambda: build_pepper_sources(http, fx, cfg),
-        "travel": lambda: build_travel_sources(http, fx, cfg),
+        "travel": lambda: build_travel_sources(http, fx, cfg, store),
     }
     if only and only not in families:
         raise SystemExit(f"Neznámá rodina zdrojů '{only}'. "
@@ -79,7 +79,10 @@ def run_scan(cfg, args) -> int:
     store = Store(cfg.db_path)
     fx = load_fx(http, store)
 
-    sources = build_sources(http, fx, cfg, args.only)
+    # Při dry-runu se stahuje vždycky nanovo. Zapamatovaný ETag by způsobil,
+    # že druhé spuštění nevypíše nic, a ladění by bylo k ničemu.
+    sources = build_sources(http, fx, cfg, args.only,
+                            None if args.dry_run else store)
     offers = collect(sources)
     log.info("Celkem %s nabídek z %s zdrojů", len(offers), len(sources))
 

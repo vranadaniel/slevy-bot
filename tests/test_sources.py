@@ -15,8 +15,10 @@ from src.sources.travel import TravelSource
 
 
 class FakeResponse:
-    def __init__(self, content: bytes) -> None:
+    def __init__(self, content: bytes, status_code: int = 200, headers=None) -> None:
         self.content = content
+        self.status_code = status_code
+        self.headers = headers or {}
 
 
 class FakeHttp:
@@ -306,6 +308,70 @@ class TestCzechTravelFeed:
         offers = self._source(self._feed(
             "Malta z Bratislavy. Letenky od 920 Kč", region=None)).fetch()
         assert offers[0].extra["region"] is None
+
+
+class TestConditionalFetch:
+    """Hlavní feed travelfree.info měří 14 MB. Při běhu každých deset minut
+    by se stahovalo zhruba 3,5 GB denně, přestože se obsah skoro nemění."""
+
+    class RecordingHttp(FakeHttp):
+        """Zaznamenává odeslané hlavičky, ať se dá ověřit podmíněný dotaz."""
+
+        def __init__(self, payloads, status=200, headers=None):
+            super().__init__(payloads)
+            self.status = status
+            self.reply_headers = headers or {}
+            self.sent: list[dict] = []
+
+        def get(self, url, **kwargs):
+            self.sent.append(kwargs.get("headers") or {})
+            resp = super().get(url)
+            return FakeResponse(resp.content, self.status, self.reply_headers)
+
+    def _source(self, http, store):
+        cfg = Config()
+        cfg.raw["sources"]["travel"]["delay_s"] = 0
+        return TravelSource(http, FakeFx(), cfg, {
+            "name": "travelfree", "credibility": 0.85,
+            "feeds": [{"url": "https://example.test/feed/"}],
+        }, store)
+
+    def _xml(self):
+        return _fly_feed([{"title": "Flights from Prague to Nepal for €426",
+                           "guid": "n-1", "categories": ["flights"]}])
+
+    def test_etag_is_remembered_and_sent_back(self, tmp_path):
+        from src.store import Store
+
+        store = Store(tmp_path / "e.db")
+        http = self.RecordingHttp([self._xml()], headers={"ETag": '"abc"'})
+        assert len(self._source(http, store).fetch()) == 1
+
+        http2 = self.RecordingHttp([self._xml()], headers={"ETag": '"abc"'})
+        self._source(http2, store).fetch()
+        store.close()
+
+        assert http.sent[0] == {}, "poprvé nemáme co poslat"
+        assert http2.sent[0]["If-None-Match"] == '"abc"'
+
+    def test_unchanged_feed_is_skipped(self, tmp_path):
+        from src.store import Store
+
+        store = Store(tmp_path / "e.db")
+        http = self.RecordingHttp([self._xml()], status=304)
+        offers = self._source(http, store).fetch()
+        store.close()
+
+        assert offers == [], "304 znamená beze změny, není co zpracovat"
+
+    def test_without_store_nothing_is_cached(self):
+        """Dry-run stahuje vždycky nanovo, ať ladění ukáže všechno."""
+        http = self.RecordingHttp([self._xml()], headers={"ETag": '"abc"'})
+        source = self._source(http, store=None)
+        source.fetch()
+        source.fetch()
+
+        assert all(sent == {} for sent in http.sent)
 
 
 class TestBuildSources:

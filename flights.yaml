@@ -55,6 +55,25 @@
 #    Místo nich jsou města nebo tvary s předložkou („to china“, „china from“),
 #    které se do názvu aerolinky netrefí.
 #
+# b2) ČESKÉ SKLOŇOVÁNÍ. Porovnává se přes `src.text.fold()`, takže na diakritice
+#    nezáleží (`řím` i `rim` fungují stejně), ale KONCOVKY fold neřeší. Proto jsou
+#    tu kmeny, ne první pády: `menork` (Menorka/Menorku/Menorce), `krét`,
+#    `mallorc`, `madeir`, `sicíli`, `sardini`, `kalábri`, `litv`, `sevill`.
+#    Skloňování mění i souhlásku („Boloňa“ -> „do Boloně“), což složení srovná.
+#
+#    Kmen ale nesmí ležet uvnitř běžného slova. Změřeno na 380 českých titulcích
+#    z cestujlevne.com: složené `rim` je ve 24 z nich, ale Řím je jen v jednom —
+#    zbytek je „přímý let“, „přímé lety“, „přímo u pláže“ a „Rimini“. Bez guardu
+#    by Řím ukusoval z „Tropický Hainan z Prahy přímým letem“ i z „Tunisko
+#    přímým letem“, tedy napříč regiony. Proto je tu `"rim "` s koncovou mezerou
+#    (v uvozovkách, jinak by ji YAML sežral), `rima` a `rime`.
+#    Ze stejného důvodu je `bali` rozepsané na `"bali z"`, `"bali v"`, `na bali`
+#    a spol. — holé `bali` je uvnitř slova „balíček“.
+#
+# ZNÁMÁ KOLIZE: na Krétě leží letovisko Bali, takže „Kréta … v letovisku Bali
+# z Prahy“ se trefí do Řecka i do Indonésie. Podřetězcem se to rozlišit nedá;
+# u téhle jedné nabídky rozhodni podle toho, že `krét` sedí taky.
+#
 # c) Odletová města tu nejsou: prague, praha, vienna, vídeň, wien, bratislava,
 #    brno, ostrava, pardubice, budapest, warsaw, varšava.
 #
@@ -89,15 +108,22 @@ regions:
     #   great_czk 900 Kč = spodní hrana skutečně vypsaných akcí (726–1 070 Kč).
     match:
       - italy
-      - itálie
       - italsk
+      - itali
+      - sicili
+      - sardini
+      - palerm
+      - benat
+      - kalabri
+      - florenci
+      - ischi
+      - terst
+      - trieste
+      - amalf
       - sicily
-      - sicílie
       - sardinia
-      - sardinie
       - naples
       - neapol
-      - palermo
       - catania
       - comiso
       - bologna
@@ -108,40 +134,39 @@ regions:
       - cagliari
       - olbia
       - venice
-      - benátky
       - verona
       - rimini
       - turin
-      - turín
       - bolzano
       - calabria
-      - kalábrie
       - apulia
       - puglia
       - tuscany
       - toskánsk
       - milan
       - rome
-      - řím
+      - "rim "
+      - rima
+      - rime
       - spain
       - španěl
-      - spanel
       - barcelona
       - madrid
       - malaga
-      - málaga
       - alicante
-      - valencia
-      - seville
-      - sevilla
       - bilbao
-      - mallorca
       - majorca
-      - menorca
-      - menorka
+      - mallorc
+      - malork
+      - menorc
+      - menork
+      - ibiz
+      - valenci
+      - sevill
+      - andalusi
       - minorca
-      - ibiza
-      - girona
+      - giron
+      - katalansk
       - costa brava
       - costa dorada
       - costa del sol
@@ -159,16 +184,19 @@ regions:
       - faro for
       - greece
       - řeck
-      - recko
+      - aten
+      - kret
+      - kefaloni
+      - lefkad
+      - karpathos
+      - mykonos
+      - "kos "
+      - poprad
       - athens
-      - atény
       - thessaloniki
       - soluň
       - santorini
       - zakynthos
-      - kefalonia
-      - kefalonie
-      - lefkada
       - skiathos
       - skopelos
       - samos
@@ -177,7 +205,6 @@ regions:
       - rhodes
       - rhodos
       - crete
-      - kréta
       - heraklion
       - herakleion
       - corfu
@@ -191,21 +218,31 @@ regions:
       - parga
       - skyros
       - chorvat
+      - zagreb
+      - zahreb
+      - cerna hor
+      - cerne hor
+      - cernou hor
+      - alban
+      - vlora
+      - pristin
+      - sofi
+      - litv
+      - katovic
+      - kosic
+      - maltu
+      - malte
+      - malty
       - dubrovnik
-      - dubrovník
       - zadar
       - pula
       - rijeka
       - croatia from
       - to croatia
       - montenegro
-      - černá hora
-      - cerna hora
       - tivat
       - podgorica
       - budva
-      - albania
-      - albáni
       - tirana
       - bosnia
       - bosna
@@ -222,10 +259,8 @@ regions:
       - ohrid
       - kosovo
       - pristina
-      - priština
       - bulgaria
       - bulhar
-      - sofia
       - burgas
       - varna
       - romania
@@ -241,18 +276,14 @@ regions:
       - poland
       - polsk
       - krakow
-      - kraków
       - krakov
       - gdansk
       - wroclaw
       - vratislav
       - katowice
-      - katovice
       - poznan
       - slovakia
       - slovensk
-      - kosice
-      - košice
       - hungary
       - maďar
       - debrecen
@@ -261,7 +292,6 @@ regions:
       - ljubljana
       - lublaň
       - lithuania
-      - litva
       - vilnius
       - kaunas
       - palanga
@@ -326,6 +356,7 @@ regions:
       - northern ireland
       - ireland
       - irsk
+      - belgi
       - dublin
       - cork from
       - cork for
@@ -356,7 +387,6 @@ regions:
       - rotterdam
       - eindhoven
       - belgium
-      - belgie
       - brusel
       - antwerp
       - bruggy
@@ -365,7 +395,6 @@ regions:
       - lucembursk
       - germany
       - německ
-      - nemeck
       - berlin
       - munich
       - mnichov
@@ -374,13 +403,11 @@ regions:
       - hamburk
       - cologne
       - dusseldorf
-      - düsseldorf
       - stuttgart
       - nuremberg
       - norimberk
       - switzerland
       - švýcar
-      - svycar
       - zurich
       - curych
       - geneva
@@ -398,8 +425,6 @@ regions:
       - liechtenstein
       - lichtenštejn
       - canary islands
-      - kanárské ostrovy
-      - kanáry
       - tenerife
       - gran canaria
       - fuerteventura
@@ -407,8 +432,11 @@ regions:
       - la palma
       - la gomera
       - el hierro
-      - madeira
       - funchal
+      - madeir
+      - kanar
+      - porto santo
+      - azurov
       - azores
       - azorsk
 
@@ -444,13 +472,10 @@ regions:
       - špicberky
       - sweden
       - švéd
-      - sved
       - stockholm
       - gothenburg
       - göteborg
-      - goteborg
       - malmo
-      - malmö
       - kiruna
       - lapland
       - laponsk
@@ -464,11 +489,9 @@ regions:
       - finsk
       - helsinki
       - rovaniemi
-      - lapónsk
       - tampere
       - turku
       - reykjavik
-      - reykjavík
       - keflavik
       - islandu
       - na island
@@ -476,7 +499,6 @@ regions:
       - to iceland
       - faroe
       - faersk
-      - faerské
       - greenland
       - grónsk
       - nuuk
@@ -536,7 +558,6 @@ regions:
       - dubai
       - dubaj
       - abu dhabi
-      - abú dhabí
       - sharjah
       - ras al khaimah
       - united arab emirates
@@ -569,7 +590,6 @@ regions:
       - jerevan
       - arméni
       - baku
-      - ázerbájdžán
       - azerbajdz
       - almaty
       - astana
@@ -604,9 +624,11 @@ regions:
     #   3–5 tis. Kč. great_czk 1 600 Kč odpovídá zjištěným €55–€80.
     match:
       - morocco
-      - maroko
       - marock
-      - marrakesh
+      - marok
+      - hurghad
+      - alexandri
+      - sahl hasheesh
       - marrakech
       - marrákeš
       - casablanca
@@ -631,14 +653,11 @@ regions:
       - tripoli
       - egypta
       - egyptsk
-      - do egypta
       - egypt from
       - to egypt
       - káhira
-      - kahira
       - cairo from
       - to cairo
-      - hurghada
       - sharm
       - šarm
       - marsa alam
@@ -649,10 +668,7 @@ regions:
       - asuán
       - taba
       - dahab
-      - el alamein
       - alamein
-      - alexandria
-      - alexandrie
 
   - name: asie-jihovychodni
     label: "Jihovýchodní Asie"
@@ -683,6 +699,13 @@ regions:
       - jihovýchodní asi
       - thailand
       - thajsk
+      - bali,
+      - bali f
+      - bali z
+      - bali s
+      - bali v
+      - na bali
+      - do bali
       - bangkok
       - phuket
       - krabi
@@ -699,7 +722,6 @@ regions:
       - hanoi
       - hanoj
       - ho chi minh
-      - ho či min
       - ho ci min
       - saigon
       - da nang
@@ -719,9 +741,7 @@ regions:
       - yangon
       - rangún
       - indonesia
-      - indonés
       - indones
-      - bali
       - jakarta
       - lombok
       - sumatra
@@ -743,7 +763,6 @@ regions:
       - singapore for
       - to singapore
       - philippines
-      - filipín
       - filipin
       - manila
       - cebu
@@ -776,7 +795,6 @@ regions:
       - tokyo
       - tokio
       - osaka
-      - ósaka
       - kyoto
       - kjóto
       - nagoya
@@ -787,7 +805,6 @@ regions:
       - hirošima
       - south korea
       - jižní korea
-      - jizni korea
       - korea from
       - to korea
       - seoul
@@ -797,6 +814,7 @@ regions:
       - jeju
       - taiwan
       - tchaj-wan
+      - jizni kore
       - taipei
       - kaohsiung
       - hong kong
@@ -806,7 +824,6 @@ regions:
       - beijing
       - peking
       - shanghai
-      - šanghaj
       - sanghaj
       - guangzhou
       - kanton
@@ -818,7 +835,6 @@ regions:
       - xian
       - harbin
       - kunming
-      - čínsk
       - cinsk
       - china from
       - china for
@@ -845,6 +861,11 @@ regions:
     #   €406 z Prahy byla výjimečná cena.
     match:
       - indick
+      - nepalu
+      - nepal z
+      - sri lanku
+      - sri lanky
+      - sri lanka z
       - do indie
       - v indii
       - india from
@@ -876,9 +897,6 @@ regions:
       - rádžastán
       - agra
       - kathmandu
-      - káthmándú
-      - nepál
-      - nepalu
       - nepal from
       - nepal for
       - to nepal
@@ -887,9 +905,7 @@ regions:
       - pokhara
       - lukla
       - everest
-      - srí lanka
       - sri lance
-      - srí lance
       - colombo
       - sri lanka from
       - to sri lanka
@@ -899,7 +915,6 @@ regions:
       - maledivy
       - malediv
       - pakistan
-      - pákistán
       - islamabad
       - lahore
       - karachi
@@ -907,7 +922,6 @@ regions:
       - bangladéš
       - dhaka
       - bhutan
-      - bhútán
       - paro
       - tibet
       - lhasa
@@ -954,10 +968,8 @@ regions:
       - chicago
       - toronto
       - montreal
-      - montreál
       - ottawa
       - quebec
-      - québec
       - halifax
       - newfoundland
       - niagara
@@ -1044,7 +1056,6 @@ regions:
       - mexico for
       - to mexico
       - cancun
-      - cancún
       - los cabos
       - playa del carmen
       - tulum
@@ -1054,13 +1065,14 @@ regions:
       - oaxaca
       - merida
       - cuba
+      - karibik
+      - karibsk
       - kuba
       - kubě
       - havana
       - varadero
       - dominican republic
       - dominikánsk
-      - dominikansk
       - punta cana
       - santo domingo
       - jamaica
@@ -1078,7 +1090,6 @@ regions:
       - antigua
       - aruba
       - curacao
-      - curaçao
       - bonaire
       - trinidad
       - tobago
@@ -1124,16 +1135,14 @@ regions:
     match:
       - brazil
       - brazíli
-      - brazili
       - rio de janeiro
       - sao paulo
-      - são paulo
       - salvador da bahia
       - fortaleza
       - recife
       - manaus
-      - argentina
       - argentin
+      - jizni ameri
       - buenos aires
       - patagonia
       - patagoni
@@ -1160,13 +1169,10 @@ regions:
       - colombia
       - kolumbi
       - bogota
-      - bogotá
       - cartagena
       - medellin
-      - medellín
       - ecuador
       - ekvádor
-      - ekvador
       - quito
       - guayaquil
       - galapagos
@@ -1212,9 +1218,11 @@ regions:
       - johannesburg
       - cape town
       - kapské město
-      - kapske mesto
       - durban
       - namibie
+      - namibi
+      - zambi
+      - gambi
       - namibia from
       - to namibia
       - windhoek
@@ -1235,8 +1243,10 @@ regions:
       - angola
       - luanda
       - nairobi
-      - mombasa
-      - keňa
+      - kene
+      - ostrov sal
+      - ostrove sal
+      - mombas
       - kena
       - keni
       - kenya from
@@ -1286,7 +1296,6 @@ regions:
       - to mauritius
       - port louis
       - reunion
-      - réunion
       - seychely
       - the seychelles
       - seychelles from
@@ -1297,7 +1306,6 @@ regions:
       - comoros
       - komory
       - sudan
-      - súdán
       - khartoum
 
   - name: oceanie
@@ -1318,6 +1326,7 @@ regions:
     match:
       - australia
       - austrálie
+      - australi
       - australsk
       - sydney
       - melbourne
@@ -1326,14 +1335,12 @@ regions:
       - adelaide
       - cairns
       - gold coast
-      - tasmania
-      - tasmánie
+      - tasmani
       - great barrier reef
       - velký bariérový útes
       - uluru
       - new zealand
       - nový zéland
-      - novy zeland
       - novém zélandu
       - auckland
       - wellington

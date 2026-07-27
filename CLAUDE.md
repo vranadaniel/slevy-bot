@@ -161,12 +161,13 @@ není: položka za pár dní vypadne z RSS.
 minut, hlavní sken v :13 a :43. Minuty jsou schválně různé — oba běhy sahají na
 tutéž SQLite databázi. `busy_timeout` ve `store.py` je druhá pojistka.
 
-**Nízký sklad povyšuje souhrn na okamžité upozornění, ale sám o sobě nic
-nespouští.** `thresholds.instant_if_stock_below` platí jen na nabídku, která by
-do souhrnu šla tak jako tak. Údaj o skladu hlásí jen `ingameAttributes`, tedy
-předplatné a top-upy — změřeno 50 položek z 800 nejprodávanějších, z toho čtyři
-s posledními kusy. Jednou z nich bylo Gemini AI Pro na 18 měsíců, 96 % dole,
-jediný kus. Objem zpráv proto nehrozí.
+**Počet kusů skladem se ve scoringu schválně nepoužívá.** Vypadá to jako
+signál naléhavosti, ale není. Změřeno: čtyři položky s posledními kusy byly
+po hodině beze změny — stejný počet kusů i cena. Digitální klíč nemá frontu
+u pokladny; „1 ks" je atribut nabídky jednoho prodejce, ne odpočet. Ze stejného
+důvodu **nemá smysl zrychlovat katalogový sken** pod stávajících 30 minut.
+Rychlost rozhoduje u error fares, ne u klíčů — proto má vlastní timer cestování.
+Sklad se jen vypisuje ve zprávě jako doplňující údaj.
 
 **`_queue` v `main.py` volá `mark_alerted`.** Není to překlep — bez toho by se
 katalogové položky vracely do souhrnu každý večer znovu.

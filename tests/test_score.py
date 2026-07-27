@@ -236,33 +236,3 @@ class TestAiCandidates:
         )
         verdicts = scorer.prescore([offer])
         assert scorer.ai_candidates(verdicts, limit=25) == []
-
-
-class TestLastPiecesInStock:
-    """Referenční nabídka projektu měla poslední kus skladem — u takové
-    se nemá čekat do večerního souhrnu.
-
-    Cena je schválně volená tak, aby sama o sobě stačila jen na souhrn
-    (1 000 Kč z 8 820 = 11 %, práh okamžité zprávy je 5 %).
-    """
-
-    GEMINI = "Google Gemini Top-Up > AI Pro > 18 Months"
-
-    def test_last_piece_promotes_digest_to_instant(self, scorer):
-        verdict = scorer.prescore([_kinguin(self.GEMINI, 1000.0, stock=1)])[0]
-
-        assert verdict.level == INSTANT
-        assert any("poslední kus" in r for r in verdict.reasons)
-
-    def test_low_stock_alone_is_not_a_bargain(self, scorer):
-        """Bez slevy je poslední kus jen poslední kus."""
-        verdict = scorer.prescore([_kinguin(self.GEMINI, 8000.0, stock=1)])[0]
-        assert verdict.level == NONE
-
-    def test_plenty_in_stock_waits_for_the_digest(self, scorer):
-        verdict = scorer.prescore([_kinguin(self.GEMINI, 1000.0, stock=250)])[0]
-        assert verdict.level == DIGEST
-
-    def test_unknown_stock_changes_nothing(self, scorer):
-        verdict = scorer.prescore([_kinguin(self.GEMINI, 1000.0)])[0]
-        assert verdict.level == DIGEST

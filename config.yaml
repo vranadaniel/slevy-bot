@@ -124,16 +124,6 @@ thresholds:
   # levný oracle ocenit neumí, takže bez AI by cestování mlčelo vždycky.
   min_credibility_ai: 0.8
 
-  # Posledních pár kusů posune nabídku ze souhrnu na okamžité upozornění.
-  # Samotný nízký sklad z ničeho trhák nedělá — musí to být položka, která
-  # by do souhrnu šla tak jako tak.
-  #
-  # Údaj o skladu hlásí jen předplatné a top-upy (50 z 800 nejprodávanějších),
-  # takže těch zpráv nemůže být moc: dnes měly poslední kusy čtyři položky.
-  # Jedna z nich byla Gemini AI Pro na 18 měsíců, 96 % dole, jediný kus —
-  # přesně ta nabídka, kvůli které tenhle bot vznikl. Nula pravidlo vypne.
-  instant_if_stock_below: 3
-
   # Prahy podle druhu zboží. Klíč se hledá jako podřetězec v `Offer.category`.
   # Letenka za 5 % běžné ceny neexistuje; i legendární error fare bývá "jen"
   # o 40-60 % pod cenou. Jednotný práh nastavený na digitální klíče by

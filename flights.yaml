@@ -27,6 +27,31 @@
 #    budapest, australia, dubai, iceland + sekce africa, north-america).
 #    Ceny v EUR, přepočet kurzem 25 Kč/EUR.
 #
+# 4) Ryanair, veřejné API bez klíče — 101 běžných zpátečních letenek z PRG, BRQ,
+#    OSR, VIE a BTS s odletem za 30–120 dní, staženo 27. 7. 2026. JEDINÝ zdroj
+#    v tomhle souboru, který neříká, co je akce, ale co stojí letenka, když se
+#    prostě koupí. Tím se dá poznat, kdy je práh nastavený moc volně.
+#
+# ---------------------------------------------------------------------------
+# PROČ SE `great_czk` U EVROPY UTÁHLO
+#
+# Původní čísla vznikla ze spodní hrany toho, co slevové weby publikují. To je
+# ale kruh: weby píšou i o běžných cenách. Měření proti Ryanairu ukázalo, kolik
+# ÚPLNĚ OBYČEJNÝCH letenek by spustilo okamžité upozornění:
+#
+#   region                   n   nejnižší  medián   práh   pinglo by
+#   evropa-nizkonakladove   54     732 Kč  1 230 Kč   900      20 %
+#   evropa-zapadni          23     796 Kč  1 263 Kč 1 500      74 %
+#   evropa-sever             5     892 Kč    961 Kč 1 800     100 %
+#   blizky-vychod            3   1 567 Kč  1 664 Kč 2 200     100 %
+#
+# Prahy u těchhle čtyř regionů proto leží pod naměřeným minimem: 600 / 700 /
+# 850 / 1 400 Kč. Dálkové regiony zůstávají beze změny — Ryanair tam nelétá,
+# takže o nich tohle měření nic neříká a měnit je bez dat by bylo hádání.
+#
+# Je to prozatímní kalibrace. Natrvalo to má vyřešit vlastní cenová historie
+# z Ryanairu, stejně jako u her rozsoudila šedý trh.
+#
 # ---------------------------------------------------------------------------
 # JAK ČÍST `match`
 #
@@ -88,7 +113,7 @@ regions:
   - name: evropa-nizkonakladove
     label: "Evropa – nízkonákladové linky (Středomoří, Balkán, střední a východní Evropa)"
     typical_czk: 2500
-    great_czk: 900
+    great_czk: 600
     # [zjištěno] cestujlevne.com 7/2026, cena + sleva -> implikovaná běžná cena:
     #   Neapol z BTS 727 Kč (-76 %) implikuje 3 000 | Palermo z BTS 726 Kč (-64 %) implikuje 2 000
     #   Bergamo z BRQ 752 Kč (-50 %) implikuje 1 500 | Krakov z PRG 858 Kč (-57 %) implikuje 2 000
@@ -105,7 +130,9 @@ regions:
     #   Podgorica 973, Lamezia 973, Řím 999, Zadar 999, Barcelona 1 019, Korfu 1 023,
     #   Malta 1 094, Ohrid 1 099, Pisa 1 119, Priština 1 149, Palermo 1 249, Alicante 1 589.
     # [odhad] Medián implikovaných běžných cen je 2 500 Kč, proto typical_czk.
-    #   great_czk 900 Kč = spodní hrana skutečně vypsaných akcí (726–1 070 Kč).
+    #   great_czk 600 Kč leží pod nejlevnější běžnou letenkou naměřenou u Ryanairu
+#   (732 Kč). Spodní hrana vypsaných akcí je 726–1 070 Kč, což se s běžnými
+#   cenami překrývá — jako spouštěč okamžité zprávy tedy nejde použít.
     match:
       - italy
       - italsk
@@ -148,7 +175,7 @@ regions:
       # Řím musí mít hranici slova na OBOU stranách. Složené `rim` je uvnitř
       # „přímý / přímé / přímo" — na 4 425 titulcích 295 zásahů, a „rima" je
       # navíc uvnitř slova „prima". Bez vodicí mezery vpředu by se „Prima cena
-      # na Tatry za 890 Kč" ocenila jako Řím a při great_czk 900 by pingla.
+      # na Tatry za 890 Kč" ocenila jako Řím a pingla by jako trhák.
       - "rim "
       - " rima"
       - " rime"
@@ -327,7 +354,7 @@ regions:
   - name: evropa-zapadni
     label: "Západní Evropa a atlantické ostrovy"
     typical_czk: 4000
-    great_czk: 1500
+    great_czk: 700
     # Region je vymezený PROVOZEM, ne zeměpisem: pevninská Iberie a Středomoří
     # patří k nízkonákladovým (viz výše), sem jde to, co se létá dráž nebo dál —
     # ostrovy v Atlantiku a linky do Británie, Francie, Beneluxu a alpských zemí.
@@ -449,7 +476,7 @@ regions:
   - name: evropa-sever
     label: "Severní Evropa (Skandinávie, Island, Finsko)"
     typical_czk: 4500
-    great_czk: 1800
+    great_czk: 850
     # Pobaltí sem SCHVÁLNĚ nepatří — Riga z PRG 894 Kč a Vilnius z PRG 888 Kč
     # se chovají jako nízkonákladové Středomoří, ne jako Sever. Jsou proto
     # v regionu evropa-nizkonakladove.
@@ -513,7 +540,7 @@ regions:
   - name: blizky-vychod
     label: "Blízký východ, Turecko a Kavkaz"
     typical_czk: 5500
-    great_czk: 2200
+    great_czk: 1400
     # Záliv sem patří spolu s Tureckem a Kavkazem, i když se to zdá divné:
     # ze střední Evropy je Dubaj cenově na úrovni Antalye, ne na úrovni Asie.
     # [zjištěno] travelfree.info, tag dubai: Dubaj z PRG €174 (≈ 4 350 Kč, HOT),

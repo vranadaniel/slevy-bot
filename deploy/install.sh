@@ -39,6 +39,14 @@ if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
 fi
 
 log "Stahuji kód do $APP_DIR"
+# Git od 2.35.2 odmítne pracovat s repozitářem, který patří jinému uživateli
+# ("dubious ownership"). Starší verze skriptu předávala celý adresář uživateli
+# slevy, takže root na něj při aktualizaci narazí. Výjimku zapisujeme jednou;
+# `--add` bez téhle kontroly by přidával duplicitní řádky při každém běhu.
+if ! git config --system --get-all safe.directory 2>/dev/null | grep -qx "$APP_DIR"; then
+    git config --system --add safe.directory "$APP_DIR"
+fi
+
 if [[ -d "$APP_DIR/.git" ]]; then
     git -C "$APP_DIR" fetch --quiet origin
     git -C "$APP_DIR" reset --quiet --hard origin/main
@@ -71,7 +79,12 @@ if [[ ! -f "$APP_DIR/data/deals.db" ]]; then
 fi
 
 log "Nastavuji práva"
-chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
+# Kód zůstává rootovi, službě stačí číst — nemá důvod přepisovat si vlastní
+# program a git pak nenaráží na cizí vlastnictví. Zapisovat se musí jen do
+# adresáře s databází.
+chown -R root:root "$APP_DIR"
+chmod -R a+rX "$APP_DIR"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/data"
 
 log "Připravuji soubor s tokeny"
 mkdir -p "$ENV_DIR"

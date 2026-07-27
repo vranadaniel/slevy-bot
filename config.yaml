@@ -32,6 +32,22 @@ sources:
       - {name: dealabs,    domain: www.dealabs.com,    currency: EUR, feeds: [hot]}
       - {name: pepperpl,   domain: www.pepper.pl,      currency: PLN, feeds: [hot, new]}
 
+  # Ryanair — jediný KATALOGOVÝ zdroj u cestování. Ostatní weby jsou feedy,
+  # kde se dá jen věřit tomu, co redakce napíše; tady vidíme tutéž trasu
+  # při každém běhu a stavíme si vlastní cenovou historii. Ta jediná umí
+  # rozsoudit, co je u té trasy skutečně nízká cena — a to i podle sezóny,
+  # kterou ceník v `flights.yaml` neumí.
+  ryanair:
+    enabled: true
+    delay_s: 0.5
+    # Okno odletu. Blíž než tři týdny jsou ceny nafouklé last minute přirážkou,
+    # dál než půl roku Ryanair letové řády teprve otevírá.
+    days_from: 21
+    days_to: 180
+    # Pardubice Ryanair neobsluhuje, Brno a Ostrava mají po třech trasách.
+    # Necháváme je tam — jsou to jediná data o těchhle letištích, jaká máme.
+    airports: [PRG, BRQ, OSR, VIE, BTS]
+
   # Cestování: letenky, hotely a zájezdy. Jeden parser na všechny weby.
   travel:
     enabled: true

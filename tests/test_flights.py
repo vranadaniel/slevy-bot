@@ -142,3 +142,76 @@ class TestScoringWithPricelist:
         store.close()
 
         assert verdict.level != INSTANT
+
+
+class TestRyanairSource:
+    """Jediný katalogový zdroj u cestování — vidíme tutéž trasu opakovaně."""
+
+    class FakeHttp:
+        def __init__(self, fares):
+            self.fares = fares
+            self.params: list[dict] = []
+
+        def get_json(self, url, params=None, **kwargs):
+            self.params.append(params or {})
+            return {"fares": self.fares}
+
+    class FakeFx:
+        def to_czk(self, amount, currency):
+            return amount * (1.0 if currency.upper() == "CZK" else 25.0)
+
+    def _fare(self, dest="BGY", city="Milan Bergamo", price=815.0):
+        return {
+            "outbound": {"departureDate": "2026-09-14T06:00:00",
+                         "arrivalAirport": {"iataCode": dest, "name": city,
+                                            "city": {"name": city}}},
+            "summary": {"price": {"value": price, "currencyCode": "CZK"}},
+        }
+
+    def _source(self, fares):
+        from src.sources.ryanair import RyanairSource
+
+        cfg = load_config()
+        cfg.raw["sources"]["ryanair"]["airports"] = ["PRG"]
+        cfg.raw["sources"]["ryanair"]["delay_s"] = 0
+        http = self.FakeHttp(fares)
+        return RyanairSource(http, self.FakeFx(), cfg), http
+
+    def test_route_is_the_identity_not_the_date(self):
+        """Uid je trasa, ne termín — jinak by se cenová historie nikdy
+        nenasbírala a celý smysl zdroje by padl."""
+        source, _ = self._source([self._fare(), self._fare(price=1200.0)])
+        offers = source.fetch()
+
+        assert len(offers) == 1
+        assert offers[0].uid == "PRG-BGY"
+
+    def test_offer_is_a_catalog_item(self):
+        from src.sources.base import CATALOG
+
+        source, _ = self._source([self._fare()])
+        offer = source.fetch()[0]
+
+        assert offer.kind == CATALOG
+        assert offer.category == "flight"
+        assert offer.price_czk == pytest.approx(815.0)
+        assert offer.extra["airport"] == "PRG"
+
+    def test_broken_airport_does_not_kill_the_source(self):
+        from src.sources.ryanair import RyanairSource
+
+        class Broken:
+            def get_json(self, *a, **kw):
+                raise RuntimeError("Ryanair spadl")
+
+        cfg = load_config()
+        assert RyanairSource(Broken(), self.FakeFx(), cfg).fetch() == []
+
+    def test_pricelist_leaves_carrier_fares_alone(self):
+        """Ceník vznikl z cen, které weby vypsaly jako AKCI. Posuzovat jím
+        ceník samotného dopravce je kruh — o té ceně smí rozhodnout jen
+        vlastní historie."""
+        source, _ = self._source([self._fare()])
+        offer = source.fetch()[0]
+
+        assert FlightOracle(load_config().flights).value_of(offer) is None

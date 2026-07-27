@@ -127,6 +127,14 @@ ceny. `flights.yaml` proto u každého regionu nese `great_czk` a `FlightOracle`
 ho předá jako `instant_below_czk`; `score.py` mu dá přednost před poměrem.
 Pole je schválně obecné — `score.py` nemá vědět, že jde o letenky.
 
+**`FlightOracle` neoceňuje katalogové nabídky (Ryanair).** Čísla v ceníku
+vznikla z cen, které slevové weby **vypsaly jako akci** — to je jiná populace
+než ceník dopravce, kde je běžná cena z podstaty níž. Posuzovat jedno druhým je
+tentýž kruh, kvůli kterému bot hlásil Krakov za 748 Kč jako trhák. U Ryanairu
+smí rozhodnout jen vlastní cenová historie; než se nasbírá, správná odpověď je
+mlčet. Bez tohohle pravidla zaplnily souhrn běžné ceny (Kodaň 892 Kč, Bristol
+947 Kč) hned první běh.
+
 **`FlightOracle` oceňuje jen `category == "flight"`.** Zájezd má v ceně
 i ubytování a stravu, takže cena letenky o něm nevypovídá. Ten ať ocení AI
 soudce, nebo zůstane neoceněný.
@@ -181,6 +189,14 @@ filtruje se lokálně. Katalog se prochází seřazený podle `bestseller.total`
 všechny. Teplota je v titulku (`^\d+°`), cena a obchod v atributech
 `<pepper:merchant>`. Čtyři národní zápisy čísel řeší `src/money.py`; parser
 vyžaduje symbol měny, jinak by z „modern 4 hotel … from €34" vypadla cena 4.
+
+**Ryanair** (`sources/ryanair.py`) — veřejné API bez klíče, ceny rovnou
+v korunách a už zpáteční. Jediný **katalogový** zdroj u cestování, takže si
+u něj bot staví vlastní cenovou historii — to je to, co má natrvalo nahradit
+odhady v `flights.yaml`. `uid` je **trasa** (`PRG-BGY`), ne termín; jinak by
+se historie nikdy nenasbírala. Parametr `limit` API odmítá s `InvalidLimit`
+bez ohledu na hodnotu, bez něj vrátí kolem 32 tras na letiště. Pardubice
+neobsluhuje, Brno a Ostrava mají po třech trasách.
 
 **Cestování** (`sources/travel.py`) — RSS, jeden parser na všechny weby.
 `travelfree.info` je nejsilnější zdroj pro střední Evropu (25 položek, nové

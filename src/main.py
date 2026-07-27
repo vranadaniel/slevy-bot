@@ -32,6 +32,7 @@ from .shipping import ShippingPolicy
 from .sources.base import CATALOG
 from .sources.kinguin import KinguinSource
 from .sources.pepper import build_pepper_sources
+from .sources.ryanair import RyanairSource
 from .sources.travel import build_travel_sources
 from .store import Store
 
@@ -48,7 +49,11 @@ def build_sources(http, fx, cfg, only: str | None = None, store=None) -> list:
     families = {
         "kinguin": lambda: [KinguinSource(http, fx, cfg)],
         "pepper": lambda: build_pepper_sources(http, fx, cfg),
-        "travel": lambda: build_travel_sources(http, fx, cfg, store),
+        # Ryanair patří do rodiny "travel": chodí spolu s ostatními letenkami
+        # na rychlém timeru, i když je to katalog a ne feed.
+        "travel": lambda: build_travel_sources(http, fx, cfg, store)
+                          + ([RyanairSource(http, fx, cfg)]
+                             if cfg.get("sources.ryanair.enabled", True) else []),
     }
     if only and only not in families:
         raise SystemExit(f"Neznámá rodina zdrojů '{only}'. "

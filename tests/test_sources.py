@@ -375,12 +375,16 @@ class TestConditionalFetch:
 
 
 class TestBuildSources:
-    def test_only_travel_skips_the_catalog(self):
+    def test_only_travel_skips_kinguin_and_pepper(self):
+        """Rychlý timer smí sáhnout jen na cestování. Ryanair do něj patří
+        taky, i když je to katalog a ne feed."""
         from src.main import build_sources
+        from src.sources.ryanair import RyanairSource
 
         sources = build_sources(FakeHttp([]), FakeFx(), Config(), only="travel")
-        assert sources, "cestovatelské zdroje se mají postavit"
-        assert all(isinstance(s, TravelSource) for s in sources)
+        types = {type(s) for s in sources}
+
+        assert types == {TravelSource, RyanairSource}
 
     def test_unknown_family_fails_loudly(self):
         from src.main import build_sources

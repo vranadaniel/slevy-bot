@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 
-from ..sources.base import Offer
+from ..sources.base import CATALOG, Offer
 from ..text import fold_term, haystack
 from .base import Value
 
@@ -48,6 +48,15 @@ class FlightOracle:
 
     def value_of(self, offer: Offer) -> Value | None:
         if offer.category != "flight":
+            return None
+
+        # Katalogový zdroj (Ryanair) ceník schválně neoceňuje. Čísla v něm
+        # vznikla z cen, které slevové weby VYPSALY jako akci — to je jiná
+        # populace než ceník dopravce, kde je běžná cena z podstaty nižší.
+        # Posuzovat jedno druhým je tentýž kruh, kvůli kterému bot hlásil
+        # Krakov za 748 Kč jako trhák. U těchhle nabídek smí rozhodnout jen
+        # vlastní cenová historie, a než se nasbírá, je správná odpověď mlčet.
+        if offer.kind == CATALOG:
             return None
 
         region = self._match(offer)

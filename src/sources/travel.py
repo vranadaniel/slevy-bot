@@ -41,7 +41,7 @@ from email.utils import parsedate_to_datetime
 
 from .. import money
 from ..sources.base import FEED, Offer
-from ..text import fold
+from ..text import fold_term, haystack
 
 log = logging.getLogger(__name__)
 
@@ -133,13 +133,13 @@ class TravelSource:
             return None
 
         categories = [(c.text or "").lower() for c in item.findall("category")]
-        haystack = f"{title.lower()} {' '.join(categories)}"
+        text = f"{title.lower()} {' '.join(categories)}"
         is_error_fare = bool(feed.get("error_fare"))
         region = _region(item)
 
-        airport = feed.get("airport") or self._match_airport(haystack)
+        airport = feed.get("airport") or self._match_airport(text)
         if airport is None:
-            if not (is_error_fare and "europe" in haystack):
+            if not (is_error_fare and "europe" in text):
                 return None
             airport = "EU"
 
@@ -160,7 +160,7 @@ class TravelSource:
             currency=currency,
             ref_price_czk=None,  # feed původní cenu neuvádí, řeší to až oracle
             url=link,
-            category=_category(haystack),
+            category=_category(text),
             merchant=self.name,
             credibility=ERROR_FARE_CREDIBILITY if is_error_fare else self.credibility,
             extra={
@@ -185,16 +185,16 @@ class TravelSource:
         age = dt.datetime.now(dt.timezone.utc) - published
         return age.days <= self.max_age_days
 
-    def _match_airport(self, haystack: str) -> str | None:
+    def _match_airport(self, raw: str) -> str | None:
         """Odletové letiště z názvu a kategorií.
 
         Bez diakritiky — české zdroje píšou „z Vídně", konfigurace „vídeň",
         a někdy se totéž město objeví i bez háčků. Viz `text.fold`.
         """
-        folded = fold(haystack)
+        text = haystack(raw)
         for entry in self.airports:
             for term in entry.get("terms", []):
-                if fold(term) in folded:
+                if fold_term(term) in text:
                     return entry["code"]
         return None
 

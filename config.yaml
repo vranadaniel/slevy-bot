@@ -46,12 +46,15 @@ sources:
     # Výrazy se hledají jako podřetězec, takže české weby potřebují KMENY, ne
     # první pády: „z Prahy" neobsahuje „praha" a „z Bratislavy" neobsahuje
     # „bratislava". Bez kmenů by cestujlevne.com nerozpoznal ani jedno letiště.
+    # Pozor na české skloňování: „z Vídně" je v‑í‑d‑n‑ě, takže kmen `víde`
+    # netrefí. Totéž „z Brna" proti `brno`. Změřeno na 4 425 českých titulcích:
+    # špatné kmeny propouštěly 717 zmínek o Vídni a 34 o Brnu.
     airports:
       - {code: PRG, terms: [prague, prah]}
-      - {code: BRQ, terms: [brno, brně]}
+      - {code: BRQ, terms: [brno, brna, brně, brnem]}
       - {code: PED, terms: [pardubic]}
       - {code: OSR, terms: [ostrav]}
-      - {code: VIE, terms: [vienna, wien, víde, viede]}
+      - {code: VIE, terms: [vienna, wien, vídeň, vídn, viedeň, viedn]}
       - {code: BTS, terms: [bratislav]}
 
     sites:

@@ -145,9 +145,15 @@ regions:
       - toskánsk
       - milan
       - rome
+      # Řím musí mít hranici slova na OBOU stranách. Složené `rim` je uvnitř
+      # „přímý / přímé / přímo" — na 4 425 titulcích 295 zásahů, a „rima" je
+      # navíc uvnitř slova „prima". Bez vodicí mezery vpředu by se „Prima cena
+      # na Tatry za 890 Kč" ocenila jako Řím a při great_czk 900 by pingla.
       - "rim "
-      - rima
-      - rime
+      - " rima"
+      - " rime"
+      - " rimu"
+      - " rimem"
       - spain
       - španěl
       - barcelona

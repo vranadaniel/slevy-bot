@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 
 from ..sources.base import Offer
-from ..text import fold
+from ..text import fold_term, haystack
 from .base import Value
 
 log = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class FlightOracle:
                               reverse=True)
         # Výrazy se skládají jednou při startu, ne u každé nabídky znovu.
         self._terms = {
-            r["name"]: [fold(t) for t in r.get("match", [])] for r in self.regions
+            r["name"]: [fold_term(t) for t in r.get("match", [])] for r in self.regions
         }
 
     def value_of(self, offer: Offer) -> Value | None:
@@ -86,11 +86,11 @@ class FlightOracle:
         Porovnává se bez diakritiky — viz `text.fold`. České skloňování totiž
         mění i souhlásku a „Boloňa" se v titulku objeví jako „do Boloně".
         """
-        haystack = fold(" ".join([
+        text = haystack(" ".join([
             offer.name,
             " ".join(offer.extra.get("categories") or []),
         ]))
         for region in self.regions:
-            if any(term in haystack for term in self._terms[region["name"]]):
+            if any(term in text for term in self._terms[region["name"]]):
                 return region
         return None

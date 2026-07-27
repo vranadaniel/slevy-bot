@@ -1,0 +1,1372 @@
+# Běžné ceny zpátečních letenek z PRG / BRQ / OSR / PED / VIE / BTS.
+#
+# typical_czk = běžná cena v běžném období
+# great_czk   = cena, o které se píše jako o výborné nabídce
+#
+# Zdroje a konkrétní zjištěné ceny jsou v komentářích u jednotlivých regionů.
+# U každého čísla je značka [zjištěno] (stojí na konkrétní ceně ze zdroje)
+# nebo [odhad] (dopočet nebo úsudek).
+#
+# ---------------------------------------------------------------------------
+# ODKUD ČÍSLA POCHÁZEJÍ
+#
+# 1) cestujlevne.com — RSS na /feed a výpis na /akcni-letenky (144 nabídek
+#    proskenováno 27. 7. 2026). U každé nabídky je cena v Kč A procento slevy.
+#    Z toho jde dopočítat, jakou běžnou cenu redakce sama uvažuje:
+#        typical = cena / (1 - procento/100)
+#    Tyhle dopočty jsou v komentářích značené jako „implikuje“. Vycházejí
+#    pozoruhodně kulatě (1500 / 2000 / 2500 / 3000 / 4000 / 17000 …), takže
+#    redakce zjevně pracuje s pevným ceníkem — přesně s tím, co stavíme tady.
+#
+# 2) Redakční text cestujlevne.com. Nejcennější druh údaje, protože běžnou
+#    cenu píše přímo. Doslovný nález z 27. 7. 2026 (Neapol z Prahy):
+#    „běžné ceny do libovolné destinace se na tyto dny pohybují spíš v rámci
+#    3 až 4 tisíc korun“ (víkendové lety z Prahy po Evropě).
+#
+# 3) travelfree.info a fly4free.com — RSS feedy (hlavní + tagy prague, vienna,
+#    budapest, australia, dubai, iceland + sekce africa, north-america).
+#    Ceny v EUR, přepočet kurzem 25 Kč/EUR.
+#
+# ---------------------------------------------------------------------------
+# JAK ČÍST `match`
+#
+# Výrazy se hledají jako PODŘETĚZEC v názvu nabídky, malými písmeny.
+# Z toho plynou tři pasti, kterých se seznamy drží:
+#
+# a) Krátké výrazy jsou uvnitř delších slov. Vynecháno nebo prodlouženo:
+#    „oman“ (uvnitř „romania“), „iran“ (uvnitř „tIRANa“), „peru“ (uvnitř
+#    „perugia“), „mali“ (uvnitř „soMALIa“), „porto“ (uvnitř „portoriko“),
+#    „faro“ (uvnitř „faroe“), „kos“ (uvnitř „kosovo“, „košice“), „nice“
+#    (uvnitř anglického „nice“), „split“, „male“, „usa“, „goa“.
+#
+# b) NÁZVY AEROLINEK obsahují názvy zemí. Tohle je nejzrádnější past a v datech
+#    je jí plno — reálné titulky ze zdrojů:
+#      „Air France flights ... to Tunisia“        -> „france“ by ukázalo na Francii
+#      „Namibie z Vídně s Ethiopian Airlines“     -> „ethiopia“ na Etiopii
+#      „Na Filipíny z Vídně s Air India“          -> „india“ na Indii
+#      „Brussels & Austrian Airlines ... Nairobi“ -> „brussels“, „austria“ na Evropu
+#      „Turkish Airlines ... to Bangkok“          -> „turkish“ na Turecko
+#      „Phuket z Prahy i Vídně s Air Arabia“      -> „arabia“ na Saúdskou Arábii
+#    Proto tu NENÍ: france, austria, brussels, india, china, canada, japan,
+#    korean, vietnam, malaysia, kenya, egypt, cairo, croatia, cyprus, iceland,
+#    portugal, mexico, serbia, ethiopia, rwanda, nepal, sri lanka, singapore,
+#    qatar, emirates, arabia, georgia, mauritius, seychelles, tanzania, baltic,
+#    scandinavia, moldova, uzbekistan, zimbabwe, senegal, madagascar, tunis.
+#    Místo nich jsou města nebo tvary s předložkou („to china“, „china from“),
+#    které se do názvu aerolinky netrefí.
+#
+# c) Odletová města tu nejsou: prague, praha, vienna, vídeň, wien, bratislava,
+#    brno, ostrava, pardubice, budapest, warsaw, varšava.
+#
+# ZNÁMÉ OMEZENÍ: fly4free a travelfree píšou i evropská města jako VÝCHOZÍ bod
+# („Full service flights from Milan to PHUKET, Thailand from €460“). Takový
+# titulek se trefí do evropy i do jihovýchodní Asie zároveň. Evropská města
+# ze seznamů vyhodit nejde — z Prahy jsou to legitimní cíle. Při shodě ve dvou
+# regionech proto ber ten VZDÁLENĚJŠÍ (dražší typical_czk); u těchhle zdrojů
+# je cíl skoro vždy ta exotičtější půlka.
+
+regions:
+  - name: evropa-nizkonakladove
+    label: "Evropa – nízkonákladové linky (Středomoří, Balkán, střední a východní Evropa)"
+    typical_czk: 2500
+    great_czk: 900
+    # [zjištěno] cestujlevne.com 7/2026, cena + sleva -> implikovaná běžná cena:
+    #   Neapol z BTS 727 Kč (-76 %) implikuje 3 000 | Palermo z BTS 726 Kč (-64 %) implikuje 2 000
+    #   Bergamo z BRQ 752 Kč (-50 %) implikuje 1 500 | Krakov z PRG 858 Kč (-57 %) implikuje 2 000
+    #   Costa Brava z PED 858 Kč (-57 %) implikuje 2 000 | Vilnius z PRG 888 Kč (-64 %) implikuje 2 500
+    #   Riga z PRG 894 Kč (-64 %) implikuje 2 500 | Černá Hora z BTS 898 Kč (-55 %) implikuje 2 000
+    #   Soluň z BTS 900 Kč (-64 %) implikuje 2 500 | Temešvár z PRG 906 Kč (-55 %) implikuje 2 000
+    #   Malta z BTS 920 Kč (-63 %) implikuje 2 500 | Chorvatsko z VIE 973 Kč (-51 %) implikuje 2 000
+    #   Boloňa z PRG 978 Kč (-61 %) implikuje 2 500 | Sicílie 982 Kč (-61 %) implikuje 2 500
+    #   Sardinie z BTS 996 Kč (-60 %) implikuje 2 500 | Málaga z BRQ 1 016 Kč (-66 %) implikuje 3 000
+    #   Korfu z BTS 1 070 Kč (-57 %) implikuje 2 500 | Řím z PRG 1 189 Kč (-60 %) implikuje 3 000
+    #   Sofie z PRG 1 359 Kč (-46 %) implikuje 2 500 | Kypr z BTS+PRG 1 449 Kč (-42 %) implikuje 2 500
+    #   Barcelona z PRG 1 767 Kč (-41 %) implikuje 3 000 | Tallinn z PRG 2 438 Kč (-39 %) implikuje 4 000
+    # [zjištěno] cestujemelevne.cz 7/2026 (z Bratislavy): Atény 851, Soluň 949, Neapol 972,
+    #   Podgorica 973, Lamezia 973, Řím 999, Zadar 999, Barcelona 1 019, Korfu 1 023,
+    #   Malta 1 094, Ohrid 1 099, Pisa 1 119, Priština 1 149, Palermo 1 249, Alicante 1 589.
+    # [odhad] Medián implikovaných běžných cen je 2 500 Kč, proto typical_czk.
+    #   great_czk 900 Kč = spodní hrana skutečně vypsaných akcí (726–1 070 Kč).
+    match:
+      - italy
+      - itálie
+      - italsk
+      - sicily
+      - sicílie
+      - sardinia
+      - sardinie
+      - naples
+      - neapol
+      - palermo
+      - catania
+      - comiso
+      - bologna
+      - boloň
+      - brindisi
+      - bergamo
+      - lamezia
+      - cagliari
+      - olbia
+      - venice
+      - benátky
+      - verona
+      - rimini
+      - turin
+      - turín
+      - bolzano
+      - calabria
+      - kalábrie
+      - apulia
+      - puglia
+      - tuscany
+      - toskánsk
+      - milan
+      - rome
+      - řím
+      - spain
+      - španěl
+      - spanel
+      - barcelona
+      - madrid
+      - malaga
+      - málaga
+      - alicante
+      - valencia
+      - seville
+      - sevilla
+      - bilbao
+      - mallorca
+      - majorca
+      - menorca
+      - menorka
+      - minorca
+      - ibiza
+      - girona
+      - costa brava
+      - costa dorada
+      - costa del sol
+      - andalusia
+      - andalusie
+      - compostela
+      - lisbon
+      - lisabon
+      - portugalsk
+      - algarve
+      - oporto
+      - porto from
+      - porto for
+      - faro from
+      - faro for
+      - greece
+      - řeck
+      - recko
+      - athens
+      - atény
+      - thessaloniki
+      - soluň
+      - santorini
+      - zakynthos
+      - kefalonia
+      - kefalonie
+      - lefkada
+      - skiathos
+      - skopelos
+      - samos
+      - thassos
+      - lesbos
+      - rhodes
+      - rhodos
+      - crete
+      - kréta
+      - heraklion
+      - herakleion
+      - corfu
+      - korfu
+      - kos island
+      - ostrov kos
+      - peloponnese
+      - peloponés
+      - halkidiki
+      - chalkidiki
+      - parga
+      - skyros
+      - chorvat
+      - dubrovnik
+      - dubrovník
+      - zadar
+      - pula
+      - rijeka
+      - croatia from
+      - to croatia
+      - montenegro
+      - černá hora
+      - cerna hora
+      - tivat
+      - podgorica
+      - budva
+      - albania
+      - albáni
+      - tirana
+      - bosnia
+      - bosna
+      - sarajevo
+      - mostar
+      - srbsko
+      - belgrade
+      - bělehrad
+      - serbia from
+      - to serbia
+      - north macedonia
+      - makedon
+      - skopje
+      - ohrid
+      - kosovo
+      - pristina
+      - priština
+      - bulgaria
+      - bulhar
+      - sofia
+      - burgas
+      - varna
+      - romania
+      - rumun
+      - bucharest
+      - bukurešť
+      - timisoara
+      - temešvár
+      - cluj
+      - chisinau
+      - kišiněv
+      - moldavsk
+      - poland
+      - polsk
+      - krakow
+      - kraków
+      - krakov
+      - gdansk
+      - wroclaw
+      - vratislav
+      - katowice
+      - katovice
+      - poznan
+      - slovakia
+      - slovensk
+      - kosice
+      - košice
+      - hungary
+      - maďar
+      - debrecen
+      - slovenia
+      - slovin
+      - ljubljana
+      - lublaň
+      - lithuania
+      - litva
+      - vilnius
+      - kaunas
+      - palanga
+      - latvia
+      - lotyš
+      - riga
+      - ryga
+      - estonia
+      - estonsk
+      - tallinn
+      - malta
+      - valletta
+      - luqa
+      - gozo
+      - kypr
+      - larnaca
+      - paphos
+      - protaras
+      - ayia napa
+      - cyprus from
+      - to cyprus
+      - ukraine
+      - ukrajin
+      - lviv
+      - kyiv
+
+  - name: evropa-zapadni
+    label: "Západní Evropa a atlantické ostrovy"
+    typical_czk: 4000
+    great_czk: 1500
+    # Region je vymezený PROVOZEM, ne zeměpisem: pevninská Iberie a Středomoří
+    # patří k nízkonákladovým (viz výše), sem jde to, co se létá dráž nebo dál —
+    # ostrovy v Atlantiku a linky do Británie, Francie, Beneluxu a alpských zemí.
+    # [zjištěno] cestujlevne.com 7/2026, cena + sleva -> implikovaná běžná cena:
+    #   Lyon z PRG 1 433 Kč (-52 %) implikuje 3 000 | Kanáry z VIE 1 490 Kč (-63 %) implikuje 4 000
+    #   Bilbao z PRG 1 815 Kč (-55 %) implikuje 4 000 | Madrid z PRG 1 898 Kč (-53 %) implikuje 4 000
+    #   Cork z PRG 2 384 Kč (-52 %) implikuje 5 000 | Lucembursko z PRG 3 679 Kč (-26 %) implikuje 5 000
+    #   Tenerife z PRG 3 940 Kč (-34 %) implikuje 6 000
+    # [zjištěno] bez uvedené slevy: Lille z PRG 1 919 Kč, Turín z PRG 3 558 Kč, Bolzano z PRG 6 979 Kč.
+    # [zjištěno] fly4free/travelfree 7/2026: Madeira z Amsterdamu €109 (≈ 2 700 Kč),
+    #   Madeira z Edinburghu a Manchesteru £54.
+    # [zjištěno] redakce cestujlevne.com o víkendových letech z PRG po Evropě:
+    #   „běžné ceny … se na tyto dny pohybují spíš v rámci 3 až 4 tisíc korun“.
+    # [odhad] typical_czk 4 000 Kč = medián implikovaných hodnot i redakční věty.
+    #   great_czk 1 500 Kč — Kanáry z VIE za 1 490 Kč byly označené jako TOP.
+    match:
+      - united kingdom
+      - great britain
+      - england
+      - scotland
+      - wales
+      - london
+      - londýn
+      - manchester
+      - edinburgh
+      - glasgow
+      - birmingham
+      - bristol
+      - liverpool
+      - newcastle
+      - belfast
+      - northern ireland
+      - ireland
+      - irsk
+      - dublin
+      - cork from
+      - cork for
+      - to cork
+      - shannon
+      - paris
+      - paříž
+      - lyon
+      - marseille
+      - bordeaux
+      - toulouse
+      - nantes
+      - lille
+      - strasbourg
+      - štrasburk
+      - montpellier
+      - french riviera
+      - francii
+      - francie
+      - corsica
+      - korsika
+      - nice from
+      - nice for
+      - to nice,
+      - netherlands
+      - nizozem
+      - amsterdam
+      - rotterdam
+      - eindhoven
+      - belgium
+      - belgie
+      - brusel
+      - antwerp
+      - bruggy
+      - charleroi
+      - luxembourg
+      - lucembursk
+      - germany
+      - německ
+      - nemeck
+      - berlin
+      - munich
+      - mnichov
+      - frankfurt
+      - hamburg
+      - hamburk
+      - cologne
+      - dusseldorf
+      - düsseldorf
+      - stuttgart
+      - nuremberg
+      - norimberk
+      - switzerland
+      - švýcar
+      - svycar
+      - zurich
+      - curych
+      - geneva
+      - ženeva
+      - basel
+      - basilej
+      - rakousk
+      - salzburg
+      - salcburk
+      - innsbruck
+      - graz
+      - monaco
+      - monako
+      - andorra
+      - liechtenstein
+      - lichtenštejn
+      - canary islands
+      - kanárské ostrovy
+      - kanáry
+      - tenerife
+      - gran canaria
+      - fuerteventura
+      - lanzarote
+      - la palma
+      - la gomera
+      - el hierro
+      - madeira
+      - funchal
+      - azores
+      - azorsk
+
+  - name: evropa-sever
+    label: "Severní Evropa (Skandinávie, Island, Finsko)"
+    typical_czk: 4500
+    great_czk: 1800
+    # Pobaltí sem SCHVÁLNĚ nepatří — Riga z PRG 894 Kč a Vilnius z PRG 888 Kč
+    # se chovají jako nízkonákladové Středomoří, ne jako Sever. Jsou proto
+    # v regionu evropa-nizkonakladove.
+    # [zjištěno] cestujlevne.com 7/2026: Göteborg z PRG 919 Kč (-54 %) implikuje 2 000,
+    #   Bergen z Krakova 952 Kč (-68 %) implikuje 3 000,
+    #   Island z Katovic/Vratislavi 2 561 Kč (-36 %) implikuje 4 000.
+    # [zjištěno] bez slevy: Rovaniemi z PRG 3 748 Kč (nová linka), Bergen z PRG 4 298 Kč.
+    # [zjištěno] travelfree.info, tag iceland: Reykjavík z PRG €140 (≈ 3 500 Kč),
+    #   z Vídně €76 (≈ 1 900 Kč), z Budapešti €95, z Varšavy €138, z Vratislavi €63.
+    # [odhad] typical_czk 4 500 Kč — Island a Norsko táhnou hladinu nad zbytek
+    #   (implikovaných 4 000) a jsou to nejčastější cíle. great_czk 1 800 Kč
+    #   odpovídá Reykjavíku z Vídně za €76 i Göteborgu za 919 Kč.
+    match:
+      - norway
+      - norsk
+      - oslo
+      - bergen
+      - stavanger
+      - trondheim
+      - tromso
+      - tromsø
+      - lofoten
+      - lofoty
+      - nordkapp
+      - svalbard
+      - špicberky
+      - sweden
+      - švéd
+      - sved
+      - stockholm
+      - gothenburg
+      - göteborg
+      - goteborg
+      - malmo
+      - malmö
+      - kiruna
+      - lapland
+      - laponsk
+      - denmark
+      - copenhagen
+      - kodaň
+      - aarhus
+      - billund
+      - aalborg
+      - finland
+      - finsk
+      - helsinki
+      - rovaniemi
+      - lapónsk
+      - tampere
+      - turku
+      - reykjavik
+      - reykjavík
+      - keflavik
+      - islandu
+      - na island
+      - iceland from
+      - to iceland
+      - faroe
+      - faersk
+      - faerské
+      - greenland
+      - grónsk
+      - nuuk
+      - ilulissat
+
+  - name: blizky-vychod
+    label: "Blízký východ, Turecko a Kavkaz"
+    typical_czk: 5500
+    great_czk: 2200
+    # Záliv sem patří spolu s Tureckem a Kavkazem, i když se to zdá divné:
+    # ze střední Evropy je Dubaj cenově na úrovni Antalye, ne na úrovni Asie.
+    # [zjištěno] travelfree.info, tag dubai: Dubaj z PRG €174 (≈ 4 350 Kč, HOT),
+    #   z Vídně €158 (≈ 3 950 Kč), z Budapešti €118, z Katovic €216, z Lipska €192,
+    #   Abú Dhabí z Budapešti €122 (≈ 3 050 Kč), Dubaj ze Sofie €168.
+    # [zjištěno] cestujlevne.com 7/2026: Jerevan z BTS 970 Kč (-68 %) implikuje 3 000,
+    #   Antalya charterem z PED 3 490 Kč (-42 %) implikuje 6 000,
+    #   Baku/Agadir/Hurghada z BTS 1 745 Kč, Turecká riviéra 4 dny z ČB 6 790 Kč.
+    # [zjištěno] cestujemelevne.cz: Jerevan z BTS 1 589 Kč.
+    # [zjištěno] travelfree.info: Baku z Budapešti €100 (≈ 2 500 Kč).
+    # [odhad] typical_czk 5 500 Kč = mezi implikovanými 3 000 (Kavkaz) a 6 000
+    #   (Turecko charterem); Záliv leží uprostřed. great_czk 2 200 Kč.
+    #   ROZPTYL: Kavkaz přes Wizz umí 1 000 Kč, Antalya v hlavní sezoně 8 000 Kč.
+    #   Nedělil jsem to — poměr 2,7× je uvnitř tolerance a shodné levné dopravce
+    #   (Wizz, Pegasus, flydubai) mají všechny tři podoblasti společné.
+    match:
+      - turkey
+      - turec
+      - istanbul
+      - antaly
+      - izmir
+      - bodrum
+      - dalaman
+      - marmaris
+      - alanya
+      - kusadasi
+      - cappadocia
+      - kappadokie
+      - ankara
+      - trabzon
+      - gaziantep
+      - israel
+      - izrael
+      - tel aviv
+      - jerusalem
+      - jeruzalém
+      - eilat
+      - ejlat
+      - jordan
+      - jordánsk
+      - amman
+      - aqaba
+      - petra
+      - lebanon
+      - libanon
+      - beirut
+      - bejrút
+      - dubai
+      - dubaj
+      - abu dhabi
+      - abú dhabí
+      - sharjah
+      - ras al khaimah
+      - united arab emirates
+      - spojené arabské emiráty
+      - uae
+      - doha
+      - dauhá
+      - bahrain
+      - bahrajn
+      - manama
+      - kuwait
+      - kuvajt
+      - muscat
+      - maskat
+      - sultanate of oman
+      - ománu
+      - saudi arabia
+      - saúdsk
+      - jeddah
+      - riyadh
+      - rijád
+      - al ula
+      - yemen
+      - jemen
+      - tbilisi
+      - batumi
+      - kutaisi
+      - gruzi
+      - yerevan
+      - jerevan
+      - arméni
+      - baku
+      - ázerbájdžán
+      - azerbajdz
+      - almaty
+      - astana
+      - kazachstán
+      - kazakhstan
+      - tashkent
+      - taškent
+      - samarkand
+      - bukhara
+      - bishkek
+      - biškek
+      - kyrgyz
+      - tajikistan
+      - tádžik
+      - turkmen
+      - tehran
+      - teherán
+      - islamic republic of iran
+
+  - name: afrika-sever
+    label: "Severní Afrika (Egypt, Maroko, Tunisko)"
+    typical_czk: 4500
+    great_czk: 1600
+    # Nízkonákladové území (Wizz, Ryanair, charterové linky), ne dálková Afrika.
+    # [zjištěno] fly4free.com 7/2026: Káhira z mnoha evropských měst €80 (≈ 2 000 Kč,
+    #   přímý let), Tunisko z mnoha evropských měst €166 s Air France (≈ 4 150 Kč).
+    # [zjištěno] travelfree.info: Marrákeš z Budapešti €55 (≈ 1 375 Kč, přímý).
+    # [zjištěno] cestujlevne.com 7/2026: Agadir a Hurghada z BTS 1 745 Kč (nová linka),
+    #   Marsa Matrouh z ČB 13 590 Kč (-41 %) — to je ale zájezd s all-inclusive,
+    #   ne samotná letenka, proto se do typical_czk nepromítá.
+    # [odhad] typical_czk 4 500 Kč — Egypt v sezoně z PRG bývá 5–8 tis. Kč, Maroko
+    #   3–5 tis. Kč. great_czk 1 600 Kč odpovídá zjištěným €55–€80.
+    match:
+      - morocco
+      - maroko
+      - marock
+      - marrakesh
+      - marrakech
+      - marrákeš
+      - casablanca
+      - agadir
+      - fez
+      - essaouira
+      - tangier
+      - ouarzazate
+      - tunisia
+      - tunisk
+      - tunisu
+      - djerba
+      - monastir
+      - enfidha
+      - hammamet
+      - algeria
+      - alžír
+      - algiers
+      - constantine
+      - libya
+      - libye
+      - tripoli
+      - egypta
+      - egyptsk
+      - do egypta
+      - egypt from
+      - to egypt
+      - káhira
+      - kahira
+      - cairo from
+      - to cairo
+      - hurghada
+      - sharm
+      - šarm
+      - marsa alam
+      - marsa matrouh
+      - marsa matruh
+      - luxor
+      - aswan
+      - asuán
+      - taba
+      - dahab
+      - el alamein
+      - alamein
+      - alexandria
+      - alexandrie
+
+  - name: asie-jihovychodni
+    label: "Jihovýchodní Asie"
+    typical_czk: 16000
+    great_czk: 10000
+    # [zjištěno] cestujlevne.com 7/2026, cena + sleva -> implikovaná běžná cena:
+    #   Ho Či Min z VIE 9 982 Kč (-41 %) implikuje 17 000
+    #   Phuket z PRG+VIE 10 991 Kč (-27 %) implikuje 15 000
+    #   Filipíny z VIE 11 319 Kč (-37 %) implikuje 18 000
+    #   Phuket z PRG 12 046 Kč (-29 %) implikuje 17 000
+    #   Bangkok z PRG 12 990 Kč (-24 %) implikuje 17 000
+    #   Bangkok z PRG 13 490 Kč (-21 %) implikuje 17 000
+    #   Bangkok z PRG 13 767 Kč (-21 %) implikuje 17 400
+    #   Filipíny z VIE 13 790 Kč (-25 %) implikuje 18 400
+    #   Filipíny z PRG 14 603 Kč (-21 %) implikuje 18 500
+    # [zjištěno] travelfree/fly4free 7/2026: Phuket z PRG €454 (GREAT DEAL, ≈ 11 350 Kč),
+    #   Phuket z VIE €458 a €478, Vietnam z VIE €422 (CHEAP), Thajsko z PRG €423,
+    #   Krabi z evropských měst €368 (GREAT DEAL), Singapur z evropských měst €369
+    #   (AMAZING), Singapur z VIE €444, Malajsie z VIE €472, Manila z VIE €449,
+    #   Bali z PRG €664, Bali z VIE €551, Bangkok z VIE €474, Bangkok ze Stockholmu
+    #   €309 (WOW, přímý).
+    # [odhad] typical_czk 16 000 Kč — kompromis mezi implikovanými 17 000 Kč
+    #   z cestujlevne a 13–14 tis. Kč, které jako běžnou cenu Praha–Bangkok
+    #   uvádějí české prodejce letenek. great_czk 10 000 Kč ≈ €400.
+    match:
+      - south east asia
+      - southeast asia
+      - jihovýchodní asi
+      - thailand
+      - thajsk
+      - bangkok
+      - phuket
+      - krabi
+      - koh samui
+      - ko samui
+      - chiang mai
+      - chiang rai
+      - pattaya
+      - hua hin
+      - vietnamu
+      - vietnamsk
+      - vietnam from
+      - to vietnam
+      - hanoi
+      - hanoj
+      - ho chi minh
+      - ho či min
+      - ho ci min
+      - saigon
+      - da nang
+      - phu quoc
+      - nha trang
+      - hoi an
+      - cambodia
+      - kambodž
+      - phnom penh
+      - siem reap
+      - angkor
+      - laos
+      - vientiane
+      - luang prabang
+      - myanmar
+      - barma
+      - yangon
+      - rangún
+      - indonesia
+      - indonés
+      - indones
+      - bali
+      - jakarta
+      - lombok
+      - sumatra
+      - sumatera
+      - java
+      - komodo
+      - yogyakarta
+      - kuala lumpur
+      - malajsi
+      - penang
+      - langkawi
+      - borneo
+      - sabah
+      - kota kinabalu
+      - malaysia from
+      - to malaysia
+      - singapur
+      - singapore from
+      - singapore for
+      - to singapore
+      - philippines
+      - filipín
+      - filipin
+      - manila
+      - cebu
+      - palawan
+      - boracay
+      - el nido
+      - brunei
+      - brunej
+      - east timor
+      - východní timor
+
+  - name: asie-vychodni
+    label: "Východní Asie (Čína, Japonsko, Korea, Tchaj-wan)"
+    typical_czk: 17000
+    great_czk: 11000
+    # [zjištěno] cestujlevne.com 7/2026: Hainan z VIE+PRG 10 990 Kč (-31 %) implikuje 16 000,
+    #   Hongkong z PRG 12 545 Kč (-26 %) implikuje 17 000.
+    # [zjištěno] travelfree/fly4free 7/2026: Hongkong z VIE €447 (≈ 11 175 Kč) a €472,
+    #   Hongkong z Budapešti €530, Soul z PRG €500 (i na Vánoce), Soul z Budapešti €495,
+    #   Soul z Frankfurtu €511, Tchaj-wan z Budapešti €498, Tchaj-wan z Varšavy €529,
+    #   Ósaka z Kodaně €507, Ósaka z Budapešti €665.
+    # [odhad] typical_czk 17 000 Kč. great_czk 11 000 Kč ≈ €440, tedy hladina
+    #   hongkongských nabídek, které zdroje označují za výhodné. Japonsko je
+    #   uvnitř regionu nejdražší — €500–€670 proti €450 za Hongkong.
+    match:
+      - japonsk
+      - japan from
+      - japan for
+      - to japan
+      - tokyo
+      - tokio
+      - osaka
+      - ósaka
+      - kyoto
+      - kjóto
+      - nagoya
+      - sapporo
+      - fukuoka
+      - okinawa
+      - hiroshima
+      - hirošima
+      - south korea
+      - jižní korea
+      - jizni korea
+      - korea from
+      - to korea
+      - seoul
+      - incheon
+      - busan
+      - pusan
+      - jeju
+      - taiwan
+      - tchaj-wan
+      - taipei
+      - kaohsiung
+      - hong kong
+      - hongkong
+      - macau
+      - macao
+      - beijing
+      - peking
+      - shanghai
+      - šanghaj
+      - sanghaj
+      - guangzhou
+      - kanton
+      - shenzhen
+      - chengdu
+      - hainan
+      - sanya
+      - xi'an
+      - xian
+      - harbin
+      - kunming
+      - čínsk
+      - cinsk
+      - china from
+      - china for
+      - to china
+      - mongolia
+      - mongolsk
+      - ulaanbaatar
+      - ulánbátar
+
+  - name: indie-subkontinent
+    label: "Indický subkontinent (Indie, Nepál, Srí Lanka, Maledivy)"
+    typical_czk: 16000
+    great_czk: 9500
+    # [zjištěno] cestujlevne.com 7/2026: Goa z PRG+VIE 12 408 Kč (-27 %) implikuje 17 000,
+    #   Nepál z PRG 11 936 Kč (-40 %) implikuje 20 000,
+    #   Srí Lanka z PRG 14 013 Kč (-22 %) implikuje 18 000,
+    #   Goa z PRG 12 454 Kč (bez uvedené slevy).
+    # [zjištěno] travelfree.info 7/2026: Bombaj z PRG €392 (≈ 9 800 Kč),
+    #   Nepál z PRG €426 (HIT), Srí Lanka z VIE €448, Maledivy z PRG €406,
+    #   Pákistán z evropských měst €322, Bangladéš z VIE €212 (open jaw, WOW).
+    # [odhad] typical_czk 16 000 Kč (implikované hodnoty 17–20 tis. jsou spíš horní
+    #   hrana). great_czk 9 500 Kč ≈ €380, tj. hladina, kterou travelfree označuje
+    #   za HIT. Maledivy jsou uvnitř regionu dražší (běžně 18–22 tis. Kč);
+    #   €406 z Prahy byla výjimečná cena.
+    match:
+      - indick
+      - do indie
+      - v indii
+      - india from
+      - india for
+      - to india
+      - mumbai
+      - bombaj
+      - bombay
+      - delhi
+      - dillí
+      - kolkata
+      - calcutta
+      - kalkata
+      - chennai
+      - bangalore
+      - bengaluru
+      - hyderabad
+      - kerala
+      - kochi
+      - goa from
+      - goa for
+      - to goa
+      - státu goa
+      - jaipur
+      - jodhpur
+      - amritsar
+      - varanasi
+      - rajasthan
+      - rádžastán
+      - agra
+      - kathmandu
+      - káthmándú
+      - nepál
+      - nepalu
+      - nepal from
+      - nepal for
+      - to nepal
+      - himalaya
+      - himálaj
+      - pokhara
+      - lukla
+      - everest
+      - srí lanka
+      - sri lance
+      - srí lance
+      - colombo
+      - sri lanka from
+      - to sri lanka
+      - galle
+      - kandy
+      - maldives
+      - maledivy
+      - malediv
+      - pakistan
+      - pákistán
+      - islamabad
+      - lahore
+      - karachi
+      - bangladesh
+      - bangladéš
+      - dhaka
+      - bhutan
+      - bhútán
+      - paro
+      - tibet
+      - lhasa
+
+  - name: severni-amerika-vychod
+    label: "Severní Amerika – východní pobřeží a východní Kanada"
+    typical_czk: 12000
+    great_czk: 6000
+    # ROZDĚLENÍ REGIONU: severni-amerika jsem musel rozseknout na východ a západ.
+    # Rozptyl uvnitř byl přes 4×: New York z PRG za €226 (≈ 5 650 Kč) proti Aljašce
+    # z PRG za 14 558 Kč, kterou cestujlevne označuje za -44 % pod běžnou cenou
+    # (tj. běžně 26 000 Kč). Jedno číslo by východ přehlušilo a západ podstřelilo.
+    # Řez jde po pobřežích, protože tak se chovají i ceny: východ obsluhují přímé
+    # linky a levné transatlantické tarify, na západ se létá s přestupem.
+    # [zjištěno] travelfree.info 7/2026: New York z Milána/Berlína/PRG/VIE €226
+    #   (≈ 5 650 Kč), New York z PRG €275 (≈ 6 875 Kč), New York z Berlína €344,
+    #   Orlando z Kodaně €439, Miami z Rigy €445.
+    # [zjištěno] fly4free.com 7/2026: New York z Varšavy €564 přímo s LOTem.
+    # [zjištěno] cestujlevne.com 7/2026: Miami z VIE 9 952 Kč (-34 %) implikuje 15 000.
+    # [odhad] typical_czk 12 000 Kč — implikovaných 15 000 platí pro Floridu,
+    #   samotný New York je levnější. great_czk 6 000 Kč ≈ €240, tedy hladina
+    #   nejlevnějších zjištěných transatlantických nabídek z Prahy a Vídně.
+    match:
+      - new york
+      - newark
+      - boston
+      - washington
+      - philadelphia
+      - baltimore
+      - atlanta
+      - charlotte
+      - detroit
+      - cleveland
+      - pittsburgh
+      - nashville
+      - new orleans
+      - miami
+      - orlando
+      - fort lauderdale
+      - tampa
+      - key west
+      - florida
+      - florid
+      - chicago
+      - toronto
+      - montreal
+      - montreál
+      - ottawa
+      - quebec
+      - québec
+      - halifax
+      - newfoundland
+      - niagara
+      - východní pobřeží usa
+      - east coast usa
+
+  - name: severni-amerika-zapad
+    label: "Severní Amerika – západní pobřeží, Aljaška, Havaj a západní Kanada"
+    typical_czk: 18000
+    great_czk: 10000
+    # [zjištěno] cestujlevne.com 7/2026, cena + sleva -> implikovaná běžná cena:
+    #   Vancouver z PRG 10 296 Kč (-43 %) implikuje 18 000
+    #   San Francisco z PRG 11 869 Kč (-30 %) implikuje 17 000
+    #   Aljaška z PRG 14 558 Kč (-44 %) implikuje 26 000
+    # [zjištěno] travelfree.info 7/2026: San Francisco z VIE €396 (≈ 9 900 Kč),
+    #   San Francisco z Budapešti €394, Los Angeles z Budapešti a PRG €412
+    #   (≈ 10 300 Kč), Los Angeles z PRG €503, Aljaška z evropských měst €517,
+    #   Seattle ze skandinávských měst €416.
+    # [odhad] typical_czk 18 000 Kč = medián implikovaných hodnot (Aljaška je
+    #   nahoře extrém). great_czk 10 000 Kč ≈ €400, což je přesně hladina
+    #   nabídek Los Angeles a San Francisco z Prahy a Vídně.
+    match:
+      - los angeles
+      - san francisco
+      - san diego
+      - las vegas
+      - seattle
+      - portland
+      - denver
+      - phoenix
+      - salt lake city
+      - dallas
+      - houston
+      - austin
+      - alaska
+      - aljaška
+      - aljasce
+      - anchorage
+      - fairbanks
+      - hawaii
+      - havaj
+      - honolulu
+      - maui
+      - vancouver
+      - calgary
+      - edmonton
+      - winnipeg
+      - kanad
+      - canada from
+      - canada for
+      - to canada
+      - grand canyon
+      - yellowstone
+      - yosemite
+      - západní pobřeží usa
+      - west coast usa
+      - california
+      - kaliforni
+      - united states
+      - the usa
+      - spojené státy
+
+  - name: karibik-stredni-amerika
+    label: "Karibik, Mexiko a Střední Amerika"
+    typical_czk: 18000
+    great_czk: 9500
+    # Odpovídá regionu, který cestujlevne.com vede jako „Střední Amerika a Karibik“
+    # (slug stredni-amerika) — Mexiko včetně Mexico City tam patří.
+    # [zjištěno] cestujlevne.com 7/2026: Mexico City z PRG 13 676 Kč (-28 %) implikuje 19 000.
+    # [zjištěno] travelfree.info 7/2026: Los Cabos z PRG €318 (HIT, ≈ 7 950 Kč),
+    #   Panama z PRG a Milána €405 (≈ 10 125 Kč), Panama z VIE €642,
+    #   Havana z VIE €506, Dominikánská republika z PRG €175 jednosměrně (LAST MINUTE),
+    #   Portoriko z Madridu €543.
+    # [zjištěno] fly4free.com 7/2026: Cancún z německých měst €544,
+    #   Dominikánská republika z Madridu €486 v hlavní sezoně (PRICE DROP).
+    # [odhad] typical_czk 18 000 Kč (implikovaných 19 000 pro Mexico City je horní
+    #   hrana, ostrovy bývají levnější). great_czk 9 500 Kč ≈ €380 — mezi HIT cenou
+    #   Los Cabos €318 a běžnou akční hladinou Panamy €405.
+    match:
+      - mexico city
+      - mexiko
+      - mexick
+      - mexico from
+      - mexico for
+      - to mexico
+      - cancun
+      - cancún
+      - los cabos
+      - playa del carmen
+      - tulum
+      - puerto vallarta
+      - riviera maya
+      - guadalajara
+      - oaxaca
+      - merida
+      - cuba
+      - kuba
+      - kubě
+      - havana
+      - varadero
+      - dominican republic
+      - dominikánsk
+      - dominikansk
+      - punta cana
+      - santo domingo
+      - jamaica
+      - jamajk
+      - montego bay
+      - kingston
+      - bahamas
+      - bahamy
+      - nassau
+      - barbados
+      - bridgetown
+      - saint lucia
+      - svatá lucie
+      - grenada
+      - antigua
+      - aruba
+      - curacao
+      - curaçao
+      - bonaire
+      - trinidad
+      - tobago
+      - martinique
+      - martinik
+      - guadeloupe
+      - puerto rico
+      - portoriko
+      - san juan
+      - haiti
+      - cayman
+      - kajmansk
+      - turks and caicos
+      - costa rica
+      - kostarik
+      - san jose
+      - panama
+      - panamsk
+      - guatemala
+      - belize
+      - honduras
+      - nicaragua
+      - nikaragua
+      - el salvador
+      - roatan
+
+  - name: jizni-amerika
+    label: "Jižní Amerika"
+    typical_czk: 22000
+    great_czk: 14000
+    # [zjištěno] cestujlevne.com 7/2026: Ekvádor z PRG 13 241 Kč (-40 %) implikuje 22 000,
+    #   Brazílie v multi-city variantách 3 790 Kč (-79 %) implikuje 18 000 — tahle
+    #   nabídka byla označená jako TOP a jde spíš o chybný tarif; do typical_czk
+    #   ji nezapočítávám.
+    # [zjištěno] travelfree.info 7/2026: Argentina z VIE €688 (≈ 17 200 Kč),
+    #   Rio de Janeiro z VIE €651, Rio z Budapešti €661, Rio z Athén €666.
+    # [zjištěno] fly4free.com 7/2026: Buenos Aires z Madridu €689 přímo,
+    #   Rio de Janeiro z Amsterdamu €692 s Deltou.
+    # [odhad] typical_czk 22 000 Kč podle implikované hodnoty u Ekvádoru.
+    #   great_czk 14 000 Kč ≈ €560. Zjištěné akce z Vídně leží na €650 (≈ 16 250 Kč),
+    #   takže 14 000 Kč je nastavené o kus přísněji než průměrná nabídka —
+    #   region má nejmenší rozpětí mezi běžnou a akční cenou ze všech dálkových.
+    match:
+      - brazil
+      - brazíli
+      - brazili
+      - rio de janeiro
+      - sao paulo
+      - são paulo
+      - salvador da bahia
+      - fortaleza
+      - recife
+      - manaus
+      - argentina
+      - argentin
+      - buenos aires
+      - patagonia
+      - patagoni
+      - ushuaia
+      - bariloche
+      - mendoza
+      - chile
+      - santiago de chile
+      - santiago, chile
+      - atacama
+      - torres del paine
+      - valparaiso
+      - peru from
+      - peru for
+      - peruvian
+      - cusco
+      - cuzco
+      - machu picchu
+      - arequipa
+      - bolivia
+      - bolívi
+      - la paz
+      - uyuni
+      - colombia
+      - kolumbi
+      - bogota
+      - bogotá
+      - cartagena
+      - medellin
+      - medellín
+      - ecuador
+      - ekvádor
+      - ekvador
+      - quito
+      - guayaquil
+      - galapagos
+      - galapágy
+      - uruguay
+      - uruguayi
+      - montevideo
+      - paraguay
+      - asuncion
+      - venezuela
+      - caracas
+      - guyana
+      - suriname
+      - surinam
+      - french guiana
+      - francouzská guyana
+      - amazon
+      - amazoni
+      - iguazu
+
+  - name: afrika-subsaharska
+    label: "Subsaharská Afrika a ostrovy Indického oceánu"
+    typical_czk: 18000
+    great_czk: 9500
+    # [zjištěno] cestujlevne.com 7/2026: Namibie z VIE 14 315 Kč (-28 %) implikuje 20 000,
+    #   Uganda z Budapešti 9 728 Kč (-39 %) implikuje 16 000,
+    #   Kapverdy z PRG 23 490 Kč (-41 %) — zájezd s all-inclusive, ne letenka.
+    # [zjištěno] travelfree.info 7/2026: Johannesburg z evropských měst €385
+    #   (≈ 9 625 Kč, „Last second“), Entebbe z Budapešti €377, Kigali z VIE €411,
+    #   Nairobi z VIE €462, Keňa z Göteborgu €429, Zanzibar z Berlína a VIE €461,
+    #   Seychely z evropských měst €366 (HIT).
+    # [zjištěno] fly4free.com 7/2026: Nairobi z VIE €467, Kapské Město z VIE
+    #   a Frankfurtu €543, Seychely z evropských měst €530 s Etihadem.
+    # [zjištěno] fly4free.com archiv: Afrika z Budapešti — Etiopie €343,
+    #   Tanzanie a JAR €360, Uganda €367.
+    # [odhad] typical_czk 18 000 Kč = mezi implikovanými 16 000 (Uganda)
+    #   a 20 000 (Namibie). great_czk 9 500 Kč ≈ €380, tedy hladina, na které
+    #   travelfree píše „Last second“ a „HIT“.
+    match:
+      - south africa
+      - jihoafrick
+      - jižní afrik
+      - johannesburg
+      - cape town
+      - kapské město
+      - kapske mesto
+      - durban
+      - namibie
+      - namibia from
+      - to namibia
+      - windhoek
+      - botswana
+      - okavango
+      - zambia
+      - zambie
+      - lusaka
+      - victoria falls
+      - viktoriiny vodopády
+      - harare
+      - zimbabwe from
+      - to zimbabwe
+      - mozambique
+      - mosambik
+      - maputo
+      - malawi
+      - angola
+      - luanda
+      - nairobi
+      - mombasa
+      - keňa
+      - kena
+      - keni
+      - kenya from
+      - to kenya
+      - tanzanie
+      - zanzibar
+      - kilimanjaro
+      - kilimandžáro
+      - dar es salaam
+      - arusha
+      - serengeti
+      - uganda
+      - ugand
+      - entebbe
+      - kigali
+      - rwandě
+      - rwanda from
+      - to rwanda
+      - burundi
+      - addis ababa
+      - addis abeba
+      - etiopi
+      - ethiopia from
+      - to ethiopia
+      - ghana
+      - accra
+      - nigeria
+      - nigéri
+      - lagos
+      - dakar
+      - senegalu
+      - gambia
+      - gambie
+      - ivory coast
+      - pobřeží slonoviny
+      - cameroon
+      - kamerun
+      - cape verde
+      - kapverd
+      - sal island
+      - boa vista
+      - madagaskar
+      - antananarivo
+      - nosy be
+      - mauricius
+      - mauritius from
+      - to mauritius
+      - port louis
+      - reunion
+      - réunion
+      - seychely
+      - the seychelles
+      - seychelles from
+      - to seychelles
+      - mahé
+      - praslin
+      - la digue
+      - comoros
+      - komory
+      - sudan
+      - súdán
+      - khartoum
+
+  - name: oceanie
+    label: "Austrálie, Nový Zéland a Oceánie"
+    typical_czk: 29000
+    great_czk: 16000
+    # [zjištěno] cestujlevne.com 7/2026: Nový Zéland z VIE 21 626 Kč (-30 %)
+    #   implikuje 31 000 Kč. Jediná nabídka z tohoto regionu za celý sken
+    #   144 položek — region je ve zdrojích nejřidší.
+    # [zjištěno] travelfree.info, tag australia: Austrálie z VIE €653 s Turkish
+    #   Airlines (≈ 16 325 Kč), Sydney z Budapešti €560 (≈ 14 000 Kč),
+    #   Melbourne z Budapešti €667, Perth z VIE €576, Austrálie z Varšavy €744
+    #   a €767, Austrálie z Vilniusu €718, z Pobaltí (Adelaide) €765,
+    #   Sydney z Milána €589, Sydney z Frankfurtu €638, Sydney z Kodaně €785.
+    # [odhad] typical_czk 29 000 Kč — implikovaných 31 000 platilo pro Nový Zéland,
+    #   Austrálie bývá o kousek levnější. great_czk 16 000 Kč ≈ €640, tedy cena
+    #   z Vídně, kterou travelfree vypsal jako nabídku hodnou zprávy.
+    match:
+      - australia
+      - austrálie
+      - australsk
+      - sydney
+      - melbourne
+      - brisbane
+      - perth
+      - adelaide
+      - cairns
+      - gold coast
+      - tasmania
+      - tasmánie
+      - great barrier reef
+      - velký bariérový útes
+      - uluru
+      - new zealand
+      - nový zéland
+      - novy zeland
+      - novém zélandu
+      - auckland
+      - wellington
+      - christchurch
+      - queenstown
+      - milford sound
+      - fiji
+      - fidži
+      - nadi
+      - french polynesia
+      - francouzská polynésie
+      - tahiti
+      - bora bora
+      - moorea
+      - new caledonia
+      - nová kaledonie
+      - noumea
+      - vanuatu
+      - samoa
+      - tonga
+      - cook islands
+      - cookovy ostrovy
+      - rarotonga
+      - papua new guinea
+      - papua nová guinea
+      - port moresby
+      - solomon islands
+      - šalomounovy ostrovy
+      - palau
+      - micronesia
+      - mikronésie
+      - kiribati
+      - tuvalu
+      - nauru
+      - easter island
+      - velikonoční ostrov

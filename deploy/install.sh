@@ -54,6 +54,16 @@ else
     git clone --quiet "$REPO" "$APP_DIR"
 fi
 
+# Tenhle skript leží v repozitáři, takže se právě mohl sám přepsat. Bash čte
+# soubor po částech za běhu — od téhle chvíle by tedy míchal kus staré a kus
+# nové verze. Přesně tak jednou uniklo zapnutí nově přidaného časovače.
+# Spustíme se proto znovu, už z aktuální verze.
+if [[ "${SLEVY_REEXEC:-0}" != "1" ]]; then
+    log "Pokračuji aktuální verzí skriptu"
+    export SLEVY_REEXEC=1
+    exec bash "$APP_DIR/deploy/install.sh"
+fi
+
 log "Připravuji virtuální prostředí"
 if [[ ! -x "$APP_DIR/.venv/bin/python" ]]; then
     python3 -m venv "$APP_DIR/.venv"
@@ -101,7 +111,12 @@ chown root:root "$ENV_FILE"
 log "Instaluji systemd jednotky"
 cp "$APP_DIR"/deploy/slevy-*.service "$APP_DIR"/deploy/slevy-*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now slevy-scan.timer slevy-travel.timer slevy-digest.timer
+# Zapínáme podle toho, jaké soubory v repozitáři jsou, ne podle ručně psaného
+# seznamu. Nově přidaný časovač se tak nastartuje sám a nemůže se zapomenout.
+TIMERS=$(cd "$APP_DIR/deploy" && ls slevy-*.timer | tr '\n' ' ')
+echo "    $TIMERS"
+# shellcheck disable=SC2086 — seznam jednotek musí zůstat rozdělený na slova
+systemctl enable --now $TIMERS
 
 log "Hotovo"
 systemctl list-timers 'slevy-*' --no-pager || true

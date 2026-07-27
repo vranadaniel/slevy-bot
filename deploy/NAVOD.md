@@ -218,6 +218,14 @@ Tentýž příkaz jako při instalaci. Je idempotentní a tokeny nepřepisuje:
 bash /opt/slevy-bot/deploy/install.sh
 ```
 
+> **Pozor: tenhle příkaz patří NA SERVER, ne do PowerShellu na tvém počítači.**
+> Windows příkaz `bash` nezná a adresář `/opt/slevy-bot` na notebooku
+> neexistuje. Když uvidíš hlášku `The term 'bash' is not recognized`, znamená
+> to, že jsi ho napsal na špatném místě — vrať se ke kroku 1 a otevři si
+> konzoli dropletu.
+
+Podrobný postup krok za krokem je v `AKTUALIZACE.md` vedle tohohle souboru.
+
 **Chci vidět, co našly letenky**
 
 ```bash

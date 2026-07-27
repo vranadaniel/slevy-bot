@@ -265,6 +265,21 @@ thresholds:
     hotel:  {instant_ratio: 0.45, digest_ratio: 0.70}
 ```
 
+Běžné ceny letenek jsou v **`flights.yaml`** — ceník po regionech světa,
+postavený na reálných nabídkách z cestujlevne.com, travelfree.info
+a fly4free.com:
+
+```yaml
+- name: asie-jihovychodni
+  typical_czk: 16000     # běžná cena zpáteční letenky
+  great_czk: 10000       # cena, o které se píše jako o skvělé nabídce
+  match: [thailand, bangkok, phuket, ...]
+```
+
+`great_czk` je tam proto, že **jednotné procento nefunguje**: skvělá cena do
+Evropy leží na 36 % běžné, do jihovýchodní Asie na 62 %. Bez toho by práh
+nastavený na Evropu dálkové lety umlčel.
+
 Zdroje se přidávají v `config.yaml` pod `sources.travel.sites`, kód se kvůli
 tomu upravovat nemusí. `airport` u feedu znamená „tenhle feed je pro dané
 letiště celý relevantní" — hodí se na tagové feedy typu

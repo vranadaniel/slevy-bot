@@ -22,6 +22,7 @@ from .fx import load_fx
 from .net import build_http
 from .notify import Telegram, format_digest, format_instant, group_of
 from .oracles.declared import DeclaredOracle
+from .oracles.flights import FlightOracle
 from .oracles.history import HistoryOracle
 from .oracles.itad import ItadOracle
 from .oracles.judge import JudgeOracle
@@ -105,7 +106,9 @@ def run_scan(cfg, args) -> int:
 
     history = HistoryOracle(store)
     shipping = ShippingPolicy(cfg.merchants)
-    oracles = [history, ReferenceOracle(cfg.references)]
+    # Ceník letenek stojí před ITAD i před AI: je zadarmo, okamžitý a u téže
+    # trasy odpoví pokaždé stejně.
+    oracles = [history, ReferenceOracle(cfg.references), FlightOracle(cfg.flights)]
 
     itad = None
     if cfg.itad_enabled:

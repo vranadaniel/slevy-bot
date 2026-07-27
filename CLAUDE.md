@@ -61,8 +61,8 @@ Sloučit je do jednoho rozhraní by bylo chybné.
 
 ### Pořadí oracles je významné
 
-V `main.py`: `history → references → itad → declared`, AI běží zvlášť dávkově až
-na tom, co zbylo. První oracle s odpovědí vyhrává, takže levné a důvěryhodné
+V `main.py`: `history → references → flights → itad → declared`, AI běží zvlášť
+dávkově až na tom, co zbylo. První oracle s odpovědí vyhrává, takže levné a důvěryhodné
 zdroje předbíhají placené. `HistoryOracle` schválně vrací `None`, když cena
 neklesla pod vlastní medián — tím pustí ke slovu ostatní.
 
@@ -115,12 +115,34 @@ o tom nemáme data, by bylo horší než to poslat.
 předplatné: YouTube Premium, Spotify, ChatGPT i to referenční Gemini za 65 Kč.
 Proto v `notify.group_of` patří do sekce s předplatným, ne mezi hry.
 
-**Cestování má vlastní prahy a bez AI mlčí.** Letenka za 5 % běžné ceny
-neexistuje — i legendární error fare bývá „jen" o 40–60 % pod cenou. Proto
-`thresholds.by_category` s klíčem `flight`/`hotel` na 0,45 a 0,70. Zároveň
-letenku ani hotel neumí ocenit žádný levný oracle, takže hodnota přijde vždycky
-až od AI soudce; do výběru je pouští `min_credibility_ai`. Přidat cestovatelské
-zdroje bez těchhle dvou věcí nedoručí ani jednu zprávu navíc — změřeno.
+**Cestování má vlastní prahy.** Letenka za 5 % běžné ceny neexistuje — i
+legendární error fare bývá „jen" o 40–60 % pod cenou. Proto
+`thresholds.by_category` s klíčem `flight`/`hotel` na 0,45 a 0,70. Bez toho
+nedoručí přidávání cestovatelských zdrojů ani jednu zprávu navíc — změřeno.
+
+**U letenek nefunguje jednotný poměr, proto `instant_below_czk`.** Skvělá cena
+do Evropy leží na 36 % běžné, do jihovýchodní Asie na 62 %. Práh nastavený na
+Evropu by dálkové lety umlčel, práh na dálkové lety by z Evropy posílal běžné
+ceny. `flights.yaml` proto u každého regionu nese `great_czk` a `FlightOracle`
+ho předá jako `instant_below_czk`; `score.py` mu dá přednost před poměrem.
+Pole je schválně obecné — `score.py` nemá vědět, že jde o letenky.
+
+**`FlightOracle` oceňuje jen `category == "flight"`.** Zájezd má v ceně
+i ubytování a stravu, takže cena letenky o něm nevypovídá. Ten ať ocení AI
+soudce, nebo zůstane neoceněný.
+
+**Při shodě ve dvou regionech vyhrává ten dražší.** Zdroje píšou i výchozí
+město („from Milan to PHUKET"), takže se titulek běžně trefí dvakrát. Cíl je
+u těchhle webů skoro vždycky ta exotičtější půlka. Regiony jsou proto
+v `FlightOracle.__init__` seřazené podle `typical_czk` sestupně.
+
+**V `flights.yaml` nejsou holé názvy zemí jako `france` nebo `india`.**
+Obsahují je názvy aerolinek: „Air France flights … to Tunisia" by skončilo ve
+Francii, „Filipíny s Air India" v Indii. Místo nich jsou tam města nebo tvary
+s předložkou (`to china`, `india from`).
+
+**Hodnotu letenky umí dodat i AI soudce**, když ji ceník nezná — do výběru
+pouští feedy `min_credibility_ai`.
 
 **Feedová položka, kterou se nepodařilo ocenit, se nezapisuje do `seen`.**
 Viz `_retry_later` v `main.py`. Zápis by ji umlčel natrvalo, přestože hodnota
@@ -181,6 +203,7 @@ počítají i s celým `href`.
 
 Prahy jsou v `config.yaml`, kód se kvůli nim upravovat nemá. `references.yaml`
 je ruční ceník — každé pravidlo je položka oceněná zadarmo a přesně.
+`flights.yaml` je totéž pro letenky, jen po regionech světa místo po názvech.
 `merchants.yaml` řeší doručení do ČR trojstavově: neznámý obchod projde, ale
 nikdy jako okamžité upozornění.
 

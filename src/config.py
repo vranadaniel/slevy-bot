@@ -28,6 +28,7 @@ class Config:
         self.raw: dict = _load_yaml("config.yaml")
         self.references: list[dict] = _load_yaml("references.yaml") or []
         self.merchants: dict = _load_yaml("merchants.yaml") or {}
+        self.flights: list[dict] = (_load_yaml("flights.yaml") or {}).get("regions", [])
 
         # Tokeny z prostředí. Jejich absence není fatální — bot umí běžet
         # v --dry-run a bez AI soudce.

@@ -196,8 +196,20 @@ class Scorer:
                 )
         else:
             instant_ratio, digest_ratio = self._thresholds_for(offer)
-            qualifies_instant = ratio <= instant_ratio
             qualifies_digest = ratio <= digest_ratio
+
+            # Když ceník sám řekne, kde leží skvělá cena, věříme mu víc než
+            # jednotnému poměru. U letenek se totiž ta hranice liší podle
+            # světadílu: skvělá cena do Evropy je 36 % běžné, do jihovýchodní
+            # Asie 62 %. Jedno číslo pro obojí musí jednu stranu odbýt.
+            instant_below = offer.extra.get("instant_below_czk")
+            if instant_below:
+                qualifies_instant = offer.price_czk <= instant_below
+                if qualifies_instant:
+                    verdict.reasons.append(
+                        f"pod hranicí skvělé ceny ({instant_below:.0f} Kč)")
+            else:
+                qualifies_instant = ratio <= instant_ratio
 
             # Vlastní historie je natolik důvěryhodná, že hluboký propad na
             # historické minimum stojí za okamžitou zprávu i bez extrémního poměru.

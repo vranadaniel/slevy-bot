@@ -60,6 +60,7 @@ class Scorer:
         self.by_category: dict = cfg.get("thresholds.by_category", {}) or {}
         self.min_cred_instant = float(cfg.get("thresholds.min_credibility_instant", 0.5))
         self.min_cred_ai = float(cfg.get("thresholds.min_credibility_ai", 0.8))
+        self.instant_stock = int(cfg.get("thresholds.instant_if_stock_below", 0))
         self.require_shipping = bool(cfg.get("thresholds.require_ships_to_cz_for_instant", True))
         # Hry: ITAD sám okamžité upozornění nespouští, viz komentář v _finalize.
         self.itad_digest = float(cfg.get("itad.digest_factor", 1.0))
@@ -217,6 +218,17 @@ class Scorer:
                     and verdict.value.origin == "history" and ratio <= 0.5):
                 qualifies_instant = True
                 verdict.reasons.append("propad na historické minimum")
+
+        # Posledních pár kusů je důvod nečekat do večera. Platí jen na nabídky,
+        # které by do souhrnu šly tak jako tak — samotný nízký sklad z ničeho
+        # trhák nedělá. Právě takhle vypadala referenční nabídka projektu:
+        # Gemini AI Pro na 18 měsíců, 96 % dole, jediný kus skladem.
+        stock = offer.extra.get("stock")
+        if (not qualifies_instant and qualifies_digest and self.instant_stock
+                and stock is not None and 0 < stock <= self.instant_stock):
+            qualifies_instant = True
+            verdict.reasons.append(
+                f"poslední {stock} ks skladem" if stock > 1 else "poslední kus skladem")
 
         if qualifies_instant:
             # Práh důvěryhodnosti hlídá nedůvěryhodné OCENĚNÍ, ne položku samotnou.

@@ -161,6 +161,13 @@ není: položka za pár dní vypadne z RSS.
 minut, hlavní sken v :13 a :43. Minuty jsou schválně různé — oba běhy sahají na
 tutéž SQLite databázi. `busy_timeout` ve `store.py` je druhá pojistka.
 
+**Nízký sklad povyšuje souhrn na okamžité upozornění, ale sám o sobě nic
+nespouští.** `thresholds.instant_if_stock_below` platí jen na nabídku, která by
+do souhrnu šla tak jako tak. Údaj o skladu hlásí jen `ingameAttributes`, tedy
+předplatné a top-upy — změřeno 50 položek z 800 nejprodávanějších, z toho čtyři
+s posledními kusy. Jednou z nich bylo Gemini AI Pro na 18 měsíců, 96 % dole,
+jediný kus. Objem zpráv proto nehrozí.
+
 **`_queue` v `main.py` volá `mark_alerted`.** Není to překlep — bez toho by se
 katalogové položky vracely do souhrnu každý večer znovu.
 
@@ -178,6 +185,25 @@ nespustil ani jeden běh, přestože workflow byly aktivní a cron platný (u no
 účtů GitHub plánované běhy omezuje). Ostrý provoz běží na serveru přes systemd
 timery; **zdrojem pravdy je databáze na serveru**, ne větev `data`. Ruční běh na
 GitHubu pracuje s vlastní kopií stavu a může poslat, co server už odeslal.
+
+## Ověřeno a nefunguje
+
+Ať se to nezkouší podruhé. Vše měřeno živě, ne z dokumentace.
+
+**Dopravci:** easyJet a Eurowings vracejí 403 (Akamai, resp. Cloudflare),
+Smartwings, Norwegian a Vueling nemají veřejné endpointy na ceny. Dálkoví
+dopravci veřejné API na ceny nemají vůbec — cena jde přes globální rezervační
+systémy. Zbývá Amadeus (free tier, klíč) a Travelpayouts (token zdarma).
+
+**České e-shopy:** Alza 403, CZC captcha (DataDome), Mall 404, Heureka 403,
+Slevomat 403, Hlídač shopů 403, Skrz nemá feed, Sleviště vrací HTML.
+
+**Cestovatelské weby:** `secretflying.com/feed/` vrací HTML, `fly4free.pl`
+error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.
+`theflightdeal.com` a `airfarespot.com` fungují, ale mají US trasy.
+
+**Herní obchody:** Eneba 400 + IP allowlist, G2A 403, Gamivo 404, Humble 403,
+Reddit vyžaduje OAuth. Fanatical a Steam odpovídají a stojí za zvážení.
 
 ## Externí rozhraní
 

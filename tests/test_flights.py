@@ -58,6 +58,18 @@ class TestRegionMatching:
     def test_unknown_destination_is_not_guessed(self, oracle):
         assert oracle.value_of(_flight("Flights to Nowhereland for €100")) is None
 
+    def test_czech_declension_that_changes_a_consonant(self, oracle):
+        """„Boloňa" se skloňuje na „do Boloně" — `ň` se před měkkým `ě` mění
+        na `n`, takže výraz `boloň` v titulku doslova není. Řeší se srovnáním
+        bez diakritiky, ne dalším výrazem v ceníku."""
+        offer = _flight("Do Boloně na týden z Prahy v říjnu. Letenky od 978 Kč")
+        assert oracle.value_of(offer) is not None
+        assert offer.extra["flight_region"] == "evropa-nizkonakladove"
+
+    def test_destination_written_without_diacritics(self, oracle):
+        offer = _flight("Letenky z Prahy do Recka od 2 400 Kc")
+        assert oracle.value_of(offer) is not None
+
 
 class TestValuation:
     def test_value_is_the_typical_fare(self, oracle):

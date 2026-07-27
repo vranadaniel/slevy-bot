@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 
 from ..sources.base import Offer
+from ..text import fold
 from .base import Value
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ class FlightOracle:
         self.regions = sorted(regions or [],
                               key=lambda r: r.get("typical_czk", 0),
                               reverse=True)
+        # Výrazy se skládají jednou při startu, ne u každé nabídky znovu.
+        self._terms = {
+            r["name"]: [fold(t) for t in r.get("match", [])] for r in self.regions
+        }
 
     def value_of(self, offer: Offer) -> Value | None:
         if offer.category != "flight":
@@ -77,12 +82,15 @@ class FlightOracle:
         běžně trefí do dvou regionů. Bere se ten vzdálenější: u těchhle webů je
         cíl skoro vždycky ta exotičtější půlka a evropské město bývá přestup.
         Regiony jsou seřazené od nejdražšího, takže stačí první shoda.
+
+        Porovnává se bez diakritiky — viz `text.fold`. České skloňování totiž
+        mění i souhlásku a „Boloňa" se v titulku objeví jako „do Boloně".
         """
-        haystack = " ".join([
-            offer.name.lower(),
+        haystack = fold(" ".join([
+            offer.name,
             " ".join(offer.extra.get("categories") or []),
-        ])
+        ]))
         for region in self.regions:
-            if any(term.lower() in haystack for term in region.get("match", [])):
+            if any(term in haystack for term in self._terms[region["name"]]):
                 return region
         return None

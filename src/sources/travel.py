@@ -41,6 +41,7 @@ from email.utils import parsedate_to_datetime
 
 from .. import money
 from ..sources.base import FEED, Offer
+from ..text import fold
 
 log = logging.getLogger(__name__)
 
@@ -149,9 +150,15 @@ class TravelSource:
         return age.days <= self.max_age_days
 
     def _match_airport(self, haystack: str) -> str | None:
+        """Odletové letiště z názvu a kategorií.
+
+        Bez diakritiky — české zdroje píšou „z Vídně", konfigurace „vídeň",
+        a někdy se totéž město objeví i bez háčků. Viz `text.fold`.
+        """
+        folded = fold(haystack)
         for entry in self.airports:
             for term in entry.get("terms", []):
-                if term.lower() in haystack:
+                if fold(term) in folded:
                     return entry["code"]
         return None
 

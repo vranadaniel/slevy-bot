@@ -226,6 +226,33 @@ Chodí toho moc? Sniž `instant_ratio` na 0,03. Chodí toho málo?
 Zvedni `digest_ratio` nebo přidej pravidla do `references.yaml` — každé nové
 pravidlo ušetří práci AI soudci a zpřesní ocenění.
 
+### Souhrn a popularita her
+
+Souhrn chodí ve čtyřech sekcích s kvótou na každou, aby trhák na předplatném
+nezapadl mezi hrami:
+
+```yaml
+digest:
+  per_group: 8     # kolik položek nejvýš v jedné sekci
+```
+
+Uvnitř sekce s hrami nerozhoduje sleva, ale **popularita**. Bez toho vyhraje
+vždycky starý titul, o který nikdo nestojí — čím míň lidí hru chce, tím
+hlouběji jde cena. Popularita se počítá z hodnocení hráčů (ITAD, endpoint
+`/games/info/v2`) a hry pod prahem se do souhrnu vůbec nedostanou:
+
+```yaml
+itad:
+  min_popularity: 0.6    # zhruba "aspoň 250 hodnocení"; 0 filtr vypne
+```
+
+Prázdná sekce s hrami → sniž na 0,5. Pořád brak → zvedni na 0,7. Skutečná
+čísla u konkrétní hry ukáže `--explain`:
+
+```
+popularita     0.94  (92 % z 742000 hodnocení, vydáno 2025-05-30)
+```
+
 ### `references.yaml`
 
 Nejužitečnější soubor v projektu. Přidávej si sem, co tě zajímá:

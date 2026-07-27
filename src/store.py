@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS itad_lows (
     cut         INTEGER,
     fetched_at  TEXT NOT NULL
 );
+
+-- Hodnocení hráčů a datum vydání. Slouží k tomu, aby souhrn nebyl samá stará
+-- hra za pár korun. Mění se pomalu, takže dlouhé TTL.
+CREATE TABLE IF NOT EXISTS itad_info (
+    game_id       TEXT PRIMARY KEY,
+    reviews_score INTEGER,
+    reviews_count INTEGER,
+    rank          INTEGER,
+    released      TEXT,
+    fetched_at    TEXT NOT NULL
+);
 """
 
 
@@ -375,6 +386,37 @@ class Store:
             "low_czk = excluded.low_czk, regular_czk = excluded.regular_czk, "
             "shop = excluded.shop, cut = excluded.cut, fetched_at = excluded.fetched_at",
             (game_id, low_czk, regular_czk, shop, cut, _now()),
+        )
+
+    def itad_get_info(self, game_id: str, ttl_days: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT reviews_score, reviews_count, rank, released, fetched_at "
+            "FROM itad_info WHERE game_id = ?",
+            (game_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            fetched = dt.datetime.fromisoformat(row["fetched_at"])
+        except ValueError:
+            return None
+        if (dt.datetime.now(dt.timezone.utc) - fetched).days >= ttl_days:
+            return None
+        return dict(row)
+
+    def itad_save_info(self, game_id: str, reviews_score: int | None,
+                       reviews_count: int | None, rank: int | None,
+                       released: str | None) -> None:
+        self.conn.execute(
+            "INSERT INTO itad_info "
+            "(game_id, reviews_score, reviews_count, rank, released, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(game_id) DO UPDATE SET "
+            "reviews_score = excluded.reviews_score, "
+            "reviews_count = excluded.reviews_count, "
+            "rank = excluded.rank, released = excluded.released, "
+            "fetched_at = excluded.fetched_at",
+            (game_id, reviews_score, reviews_count, rank, released, _now()),
         )
 
     # ---------- údržba ----------

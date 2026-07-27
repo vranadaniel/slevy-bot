@@ -16,9 +16,10 @@ class FakeFx:
 class FakeHttp:
     """Zaznamenává volání, ať se dá ověřit dávkování a cache."""
 
-    def __init__(self, lookup=None, lows=None) -> None:
+    def __init__(self, lookup=None, lows=None, info=None) -> None:
         self.lookup = lookup or {}
         self.lows = lows or []
+        self.info = info or {}
         self.calls: list[str] = []
 
     def post_json(self, url, payload, headers=None, timeout_s=None):
@@ -26,6 +27,18 @@ class FakeHttp:
         if "lookup" in url:
             return {title: self.lookup.get(title) for title in payload}
         return [row for row in self.lows if row["id"] in payload]
+
+    def get_json(self, url, params=None, headers=None, **kwargs):
+        self.calls.append(url)
+        return self.info.get((params or {}).get("id"), {})
+
+
+def _info_row(score=90, count=50_000, rank=120, released="2023-05-01"):
+    return {
+        "reviews": [{"source": "Steam", "score": score, "count": count}],
+        "stats": {"rank": rank, "waitlisted": 10, "collected": 20},
+        "releaseDate": released,
+    }
 
 
 def _low_row(game_id, low=120.0, regular=1500.0, shop="Steam", cut=92):
@@ -144,6 +157,107 @@ class TestCaching:
         oracle = ItadOracle(Broken(), store, FakeFx(), cfg)
         oracle.prepare([_game()])          # nesmí vyhodit výjimku
         assert oracle.value_of(_game()) is None
+
+
+class TestPopularity:
+    """Souhrn se jinak zaplní starými hrami za pár korun — čím míň lidí hru
+    chce, tím hlouběji jde cena."""
+
+    def _oracle(self, setup, info):
+        cfg, store = setup
+        http = FakeHttp(lookup={"Gothic 1 Remake": "uuid-1"},
+                        lows=[_low_row("uuid-1")], info={"uuid-1": info})
+        return http, ItadOracle(http, store, FakeFx(), cfg)
+
+    def test_fills_popularity_and_review_details(self, setup):
+        http, oracle = self._oracle(setup, _info_row(score=92, count=742_000))
+        offer = _game()
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])
+
+        assert offer.extra["popularity"] > 0.9
+        assert offer.extra["reviews_score"] == 92
+        assert offer.extra["reviews_count"] == 742_000
+        assert offer.extra["released"] == "2023-05-01"
+
+    def test_obscure_game_scores_low(self, setup):
+        _, oracle = self._oracle(setup, _info_row(score=55, count=18))
+        offer = _game()
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])
+
+        assert offer.extra["popularity"] < 0.5
+
+    def test_game_without_reviews_falls_back_to_bestseller_rank(self, setup):
+        """Battlefield ani Call of Duty nejsou na Steamu, a přitom je to
+        přesně to, co má projít."""
+        _, oracle = self._oracle(setup, _info_row(score=None, count=None))
+        offer = _game()
+        offer.credibility = 0.98
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])
+
+        assert offer.extra["popularity"] == pytest.approx(0.98)
+
+    def test_second_run_uses_cache(self, setup):
+        http, oracle = self._oracle(setup, _info_row())
+        offer = _game()
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])
+        calls = len(http.calls)
+
+        oracle.enrich_popularity([offer])
+        assert len(http.calls) == calls
+
+    def test_api_failure_does_not_raise(self, setup):
+        cfg, store = setup
+
+        class Broken(FakeHttp):
+            def get_json(self, *a, **kw):
+                raise RuntimeError("ITAD spadlo")
+
+        http = Broken(lookup={"Gothic 1 Remake": "uuid-1"}, lows=[_low_row("uuid-1")])
+        oracle = ItadOracle(http, store, FakeFx(), cfg)
+        offer = _game()
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])       # nesmí vyhodit výjimku
+        assert "popularity" not in offer.extra
+
+    def test_non_game_is_not_asked_about(self, setup):
+        cfg, store = setup
+        http = FakeHttp()
+        oracle = ItadOracle(http, store, FakeFx(), cfg)
+        offer = Offer(source="kinguin", kind=CATALOG, uid="s1",
+                      name="Google Gemini AI Pro 18 Months", price_czk=65.0,
+                      url="http://x", extra={"product_type": "INGAME_TOPUP"})
+        oracle.prepare([offer])
+        oracle.enrich_popularity([offer])
+        assert http.calls == []
+
+
+class TestDropUnpopular:
+    def test_filters_only_known_low_popularity(self, setup):
+        from src.main import drop_unpopular
+        from src.score import DIGEST, Verdict
+
+        junk = Verdict(offer=_game(uid="a"), level=DIGEST)
+        junk.offer.extra["popularity"] = 0.2
+        hit = Verdict(offer=_game(uid="b"), level=DIGEST)
+        hit.offer.extra["popularity"] = 0.8
+        unknown = Verdict(offer=_game(uid="c"), level=DIGEST)
+
+        kept = drop_unpopular([junk, hit, unknown], 0.5)
+
+        assert [v.offer.uid for v in kept] == ["b", "c"], \
+            "neznámá popularita není důvod mlčet"
+
+    def test_zero_threshold_disables_the_filter(self, setup):
+        from src.main import drop_unpopular
+        from src.score import DIGEST, Verdict
+
+        junk = Verdict(offer=_game(uid="a"), level=DIGEST)
+        junk.offer.extra["popularity"] = 0.01
+        assert drop_unpopular([junk], 0.0) == [junk]
 
 
 class TestHistoricalLowGate:

@@ -92,6 +92,7 @@ def run_scan(cfg, args) -> int:
     shipping = ShippingPolicy(cfg.merchants)
     oracles = [history, ReferenceOracle(cfg.references)]
 
+    itad = None
     if cfg.itad_enabled:
         itad = ItadOracle(http, store, fx, cfg)
         # Dávkové doplnění cache musí proběhnout před scoringem — jinak by se
@@ -118,11 +119,17 @@ def run_scan(cfg, args) -> int:
         log.info("AI soudce vypnutý (chybí klíč nebo judge.enabled=false)")
 
     if args.explain:
-        return explain(verdicts, args.explain)
+        return explain(verdicts, args.explain, itad)
 
     instant = [v for v in verdicts if v.level == INSTANT]
     digest = [v for v in verdicts if v.level == DIGEST]
     instant.sort(key=lambda v: v.value_ratio or 1.0)
+
+    # Hodnocení hráčů se doptáváme až tady, na hrstce položek mířících do
+    # souhrnu — endpoint bere jednu hru na dotaz.
+    if itad is not None:
+        itad.enrich_popularity([v.offer for v in digest])
+        digest = drop_unpopular(digest, float(cfg.get("itad.min_popularity", 0.6)))
 
     if args.dry_run:
         report(verdicts, instant, digest)
@@ -190,6 +197,29 @@ def run_scan(cfg, args) -> int:
     return 0
 
 
+def drop_unpopular(digest: list, min_popularity: float) -> list:
+    """Vyhodí hry, o které nikdo nestojí.
+
+    Sleva sama o sobě vytahuje nahoru staré tituly — čím míň lidí hru chce,
+    tím hlouběji jde cena. Filtr se týká jen položek se **známou** popularitou,
+    tedy her, které ITAD zná. Neznámé se nechávají projít a v souhrnu spadnou
+    dolů; mlčet o něčem jen proto, že o tom nemáme data, by bylo horší.
+    """
+    if min_popularity <= 0:
+        return digest
+
+    kept, dropped = [], 0
+    for verdict in digest:
+        popularity = verdict.offer.extra.get("popularity")
+        if popularity is not None and popularity < min_popularity:
+            dropped += 1
+            continue
+        kept.append(verdict)
+    if dropped:
+        log.info("Ze souhrnu vypadlo %s neatraktivních her", dropped)
+    return kept
+
+
 def _queue(store, verdict) -> None:
     offer = verdict.offer
     store.queue_digest(offer.source, offer.uid, {
@@ -198,6 +228,10 @@ def _queue(store, verdict) -> None:
         "price_czk": offer.price_czk,
         "value_ratio": verdict.value_ratio,
         "group": group_of(offer),
+        "popularity": offer.extra.get("popularity"),
+        "reviews_score": offer.extra.get("reviews_score"),
+        "reviews_count": offer.extra.get("reviews_count"),
+        "released": offer.extra.get("released"),
     })
     # Zapsat i u souhrnu, jinak by deduplikace neměla o čem rozhodovat příště.
     store.mark_alerted(offer.source, offer.uid, offer.price_czk, DIGEST)
@@ -207,26 +241,28 @@ def run_digest(cfg) -> int:
     http = build_http(cfg)
     store = Store(cfg.db_path)
     items = store.pop_digest()
-    max_items = int(cfg.get("telegram.max_digest_items", 25))
+    per_group = int(cfg.get("digest.per_group", 8))
+    max_items = int(cfg.get("digest.max_items", 32))
 
     if not items:
         log.info("Fronta souhrnu je prázdná, nic neposílám")
         store.close()
         return 0
 
+    text = format_digest(items, per_group, max_items)
     if not cfg.has_telegram:
-        print(format_digest(items, max_items))
+        print(text)
         store.close()
         return 0
 
     telegram = Telegram(http, cfg.telegram_token, cfg.telegram_chat_id)
-    ok = telegram.send(format_digest(items, max_items))
+    ok = telegram.send_long(text)
     store.commit()
     store.close()
     return 0 if ok else 1
 
 
-def explain(verdicts, needle: str) -> int:
+def explain(verdicts, needle: str, itad=None) -> int:
     needle = needle.lower()
     hits = [v for v in verdicts
             if needle == v.offer.uid.lower() or needle in v.offer.name.lower()]
@@ -234,7 +270,13 @@ def explain(verdicts, needle: str) -> int:
         print(f"Nic nesedí na '{needle}'.")
         return 1
 
-    for verdict in hits[:10]:
+    hits = hits[:10]
+    # Popularita se jinak zjišťuje jen u souhrnu; tady je to hlavní důvod,
+    # proč se člověk ptá — podle čeho jinak nastavit itad.min_popularity.
+    if itad is not None:
+        itad.enrich_popularity([v.offer for v in hits])
+
+    for verdict in hits:
         offer = verdict.offer
         print("=" * 70)
         print(offer.name)
@@ -244,6 +286,15 @@ def explain(verdicts, needle: str) -> int:
         print(f"  důvěryhodnost  {offer.credibility:.2f}")
         print(f"  doručení do ČR {verdict.ships_to_cz}")
         print(f"  hist. minimum  {verdict.all_time_low}")
+        print(f"  sekce souhrnu  {group_of(offer)}")
+        popularity = offer.extra.get("popularity")
+        if popularity is not None:
+            score = offer.extra.get("reviews_score")
+            count = offer.extra.get("reviews_count")
+            source = (f"{score} % z {count} hodnocení" if count
+                      else "bez hodnocení, bere se prodejnost na Kinguinu")
+            print(f"  popularita     {popularity:.2f}  ({source}"
+                  f", vydáno {offer.extra.get('released') or '?'})")
         if verdict.value:
             print(f"  hodnota        {verdict.value.real_value_czk:.0f} Kč"
                   f"  ({verdict.value.origin}, důvěra {verdict.value.confidence:.2f})")
@@ -271,7 +322,9 @@ def report(verdicts, instant, digest) -> None:
         for verdict in sorted(group, key=lambda v: v.value_ratio or 1.0):
             ratio = f"{verdict.value_ratio * 100:5.1f} %" if verdict.value_ratio else "   ?  "
             origin = verdict.value.origin if verdict.value else "-"
-            print(f"  {verdict.offer.price_czk:>8.0f} Kč  {ratio}  "
+            popularity = verdict.offer.extra.get("popularity")
+            pop = f"{popularity:.2f}" if popularity is not None else "  - "
+            print(f"  {verdict.offer.price_czk:>8.0f} Kč  {ratio}  pop {pop}  "
                   f"[{origin:<10}] {verdict.offer.name[:60]}")
         print()
 

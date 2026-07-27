@@ -29,6 +29,8 @@ s TTL. V ustáleném stavu tedy oracle skoro nic nevolá.
 from __future__ import annotations
 
 import logging
+import math
+import time
 
 from .. import titles as title_utils
 from ..sources.base import CATALOG, Offer
@@ -39,6 +41,7 @@ log = logging.getLogger(__name__)
 BASE_URL = "https://api.isthereanydeal.com"
 LOOKUP_CHUNK = 100     # názvů na jeden dotaz
 HISTORYLOW_CHUNK = 200  # tvrdý limit API
+INFO_DELAY_S = 0.15     # /games/info/v2 bere jednu hru na dotaz, nespěchejme
 
 # Typy produktů z Kinguinu, u kterých má smysl ptát se na hru.
 # RANDOM_KEY schválně chybí: náhodný klíč nemá známý obsah, takže se nedá ocenit.
@@ -57,6 +60,8 @@ class ItadOracle:
         self.ttl_days = int(cfg.get("itad.low_ttl_days", 7))
         self.max_lookup = int(cfg.get("itad.max_lookup_per_run", 600))
         self.max_lows = int(cfg.get("itad.max_lows_per_run", 600))
+        self.info_ttl_days = int(cfg.get("itad.info_ttl_days", 30))
+        self.max_info = int(cfg.get("itad.max_info_per_run", 120))
         self._resolved: dict[str, str] = {}  # uid nabídky -> game_id
 
     # ---------- příprava dávky ----------
@@ -157,6 +162,59 @@ class ItadOracle:
     def _headers(self) -> dict:
         return {"ITAD-API-Key": self.api_key, "Content-Type": "application/json"}
 
+    # ---------- popularita her ----------
+
+    def enrich_popularity(self, offers: list[Offer]) -> None:
+        """Doplní `extra["popularity"]` u her z dané hrstky nabídek.
+
+        Volá se **až na tom, co míří do souhrnu**, ne na celém katalogu:
+        endpoint bere jednu hru na dotaz, takže 5 000 položek by znamenalo
+        5 000 požadavků. Po prvních dnech je práce skoro nulová — hodnocení
+        se v cache drží měsíc.
+        """
+        if not self.api_key:
+            return
+
+        wanted: dict[str, list[Offer]] = {}
+        for offer in offers:
+            game_id = self._resolved.get(offer.uid)
+            if game_id:
+                wanted.setdefault(game_id, []).append(offer)
+        if not wanted:
+            return
+
+        stale = [gid for gid in wanted
+                 if self.store.itad_get_info(gid, self.info_ttl_days) is None]
+        fetched = 0
+        for game_id in stale[: self.max_info]:
+            try:
+                data = self.http.get_json(
+                    f"{BASE_URL}/games/info/v2",
+                    params={"id": game_id}, headers=self._headers(),
+                )
+            except Exception as exc:  # noqa: BLE001 — výpadek nesmí shodit běh
+                log.warning("ITAD info pro %s selhalo: %s", game_id, exc)
+                continue
+            self.store.itad_save_info(game_id, *_review_stats(data))
+            fetched += 1
+            if INFO_DELAY_S:
+                time.sleep(INFO_DELAY_S)
+
+        if fetched:
+            self.store.commit()
+            log.info("ITAD: načteno %s hodnocení her", fetched)
+
+        for game_id, group in wanted.items():
+            info = self.store.itad_get_info(game_id, self.info_ttl_days)
+            if not info:
+                continue
+            for offer in group:
+                offer.extra["popularity"] = popularity(info, offer.credibility)
+                offer.extra["reviews_score"] = info["reviews_score"]
+                offer.extra["reviews_count"] = info["reviews_count"]
+                offer.extra["released"] = info["released"]
+                offer.extra["itad_rank"] = info["rank"]
+
     # ---------- rozhraní oracle ----------
 
     def value_of(self, offer: Offer) -> Value | None:
@@ -189,6 +247,50 @@ class ItadOracle:
             note=note,
             confidence=0.9,
         )
+
+
+def _review_stats(data: dict):
+    """Z odpovědi /games/info/v2 vytáhne, co potřebujeme: (skóre, počet, rank, vydání).
+
+    `reviews` je pole přes víc zdrojů. Bereme to s nejvíc hlasy — u her na
+    Steamu je to Steam, u ostatních aspoň něco.
+    """
+    reviews = [r for r in (data.get("reviews") or []) if r.get("count")]
+    best = max(reviews, key=lambda r: r["count"], default=None)
+    stats = data.get("stats") or {}
+    return (
+        (best or {}).get("score"),
+        (best or {}).get("count"),
+        stats.get("rank"),
+        data.get("releaseDate"),
+    )
+
+
+def popularity(info: dict, fallback: float | None = None) -> float:
+    """0–1: jak moc o tu hru lidi stojí.
+
+    Proč to vůbec počítáme: sleva sama o sobě vytahuje nahoru tituly, o které
+    nikdo nestojí — čím míň lidí hru chce, tím hlouběji jde cena. Souhrn se pak
+    plní starými hrami za pár korun a trhák zapadne.
+
+    Objem hodnocení říká, jestli hru vůbec někdo hrál, skóre jestli za to
+    stála. Ani jedno samo nestačí: 98 % ze šesti hlasů nic neznamená a stovky
+    tisíc hlasů má i propadák. Objem se bere logaritmicky, protože rozdíl mezi
+    tisícem a deseti tisíci hodnocení je podstatný, mezi 300 a 310 tisíci ne.
+
+    Hry bez hodnocení (Battle.net, EA App) padají na `fallback` — pozici
+    v žebříčku prodejnosti Kinguinu. Vlastní `stats.rank` z ITAD schválně
+    nepoužíváme: neměřili jsme, jak je rozložený, kdežto prodejnosti rozumíme.
+    """
+    count = info.get("reviews_count") or 0
+    if count <= 0:
+        return fallback if fallback is not None else 0.0
+
+    volume = min(1.0, math.log10(count + 1) / 5.0)   # 100 000 hodnocení -> 1,0
+    score = info.get("reviews_score")
+    if score is None:
+        return volume
+    return 0.65 * volume + 0.35 * (max(0.0, min(100.0, float(score))) / 100.0)
 
 
 def _is_game(offer: Offer) -> bool:

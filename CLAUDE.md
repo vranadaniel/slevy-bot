@@ -96,6 +96,24 @@ prodejce sám; šunta „Tanks Battle" se tváří na 97,50 € a 99 % slevu.
 jen změny ceny, takže prostý medián by lhal: položka za 149 Kč tři týdny a pak
 za 60 Kč má v logu dva řádky a medián 104 Kč, přestože běžná cena je 149 Kč.
 
+**Popularita her se zjišťuje až u položek mířících do souhrnu.** Endpoint
+`/games/info/v2` bere jednu hru na dotaz, takže na celém katalogu by to bylo
+5 000 požadavků. `ItadOracle.enrich_popularity` proto běží v `main.py` až na
+seznamu `digest`, ne v `prepare()`. Vzorec kombinuje počet hodnocení
+(logaritmicky) a skóre; hry bez hodnocení na Steamu — Battlefield, Call of Duty
+— padají na `Offer.credibility`, tedy prodejnost na Kinguinu. `stats.rank`
+z ITAD se schválně nepoužívá: neměřili jsme jeho rozložení.
+
+**Popularita se nedostala do `score.py`.** Je to věc řazení a filtrování
+souhrnu, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.
+Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`. Filtr
+se týká jen položek se **známou** popularitou — mlčet o něčem jen proto, že
+o tom nemáme data, by bylo horší než to poslat.
+
+**`INGAME_TOPUP` na Kinguinu není hra.** Navzdory názvu je to škatulka na
+předplatné: YouTube Premium, Spotify, ChatGPT i to referenční Gemini za 65 Kč.
+Proto v `notify.group_of` patří do sekce s předplatným, ne mezi hry.
+
 **`_queue` v `main.py` volá `mark_alerted`.** Není to překlep — bez toho by se
 katalogové položky vracely do souhrnu každý večer znovu.
 
@@ -132,6 +150,12 @@ z let 2020–2021, proto `max_age_days`.
 (i nenalezené, ať se marné dotazy neopakují), minima s TTL.
 
 ## Ladění chování
+
+Souhrn chodí ve čtyřech pevných sekcích (`notify.GROUP_ORDER`) s kvótou
+`digest.per_group` na každou. Kvóta je celý smysl rozdělení — bez ní zaberou
+hry celou zprávu a trhák na předplatném propadne pod strop. Delší zpráva se
+dělí přes `notify.split_message`, protože odkazy se do limitu 4096 znaků
+počítají i s celým `href`.
 
 Prahy jsou v `config.yaml`, kód se kvůli nim upravovat nemá. `references.yaml`
 je ruční ceník — každé pravidlo je položka oceněná zadarmo a přesně.

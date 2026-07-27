@@ -44,6 +44,15 @@ class Telegram:
             log.error("Telegram odmítl zprávu: %s", exc)
             return False
 
+    def send_long(self, text: str) -> bool:
+        """Souhrn se čtyřmi sekcemi se do jedné zprávy nemusí vejít.
+
+        Telegram bere 4096 znaků a odkazy v HTML se do limitu počítají celé,
+        takže reálná kapacita je znatelně menší, než kolik je vidět. Bez dělení
+        by celý souhrn tiše spadl na chybě.
+        """
+        return all(self.send(part) for part in split_message(text))
+
     def get_updates(self) -> dict:
         return self.http.get(
             API.format(token=self.token, method="getUpdates")
@@ -102,46 +111,126 @@ def _fmt_ratio(ratio: float) -> str:
     return f"{pct:.1f} %".replace(".", ",") if pct < 10 else f"{pct:.0f} %"
 
 
-def format_digest(items: list[dict], max_items: int = 25) -> str:
+HRY = "🎮 Hry"
+PREDPLATNE = "🔑 Předplatné a software"
+CESTOVANI = "✈️ Cestování"
+OSTATNI = "🛒 Ostatní"
+
+# Pořadí sekcí ve zprávě je pevné, ať víš, kam se dívat, a nemusíš to hledat.
+GROUP_ORDER = [HRY, PREDPLATNE, CESTOVANI, OSTATNI]
+
+
+def format_digest(items: list[dict], per_group: int = 8, max_items: int = 32) -> str:
+    """Souhrn po sekcích, každá s vlastní kvótou.
+
+    Kvóta je celý smysl rozdělení: bez ní zaberou hry celou zprávu a trhák
+    na předplatném nebo letence propadne dolů, kde ho ořízne strop.
+    """
     if not items:
         return "📭 Dnes nic, co by stálo za řeč."
 
-    total = len(items)
-    items = sorted(items, key=lambda i: i.get("value_ratio") or 1.0)[:max_items]
-
-    header = f"📋 <b>Denní souhrn — {len(items)} nabídek</b>"
-    if total > len(items):
-        header = f"📋 <b>Denní souhrn — {len(items)} nejlepších z {total}</b>"
-    lines = [header, ""]
-    by_category: dict[str, list[dict]] = {}
+    by_group: dict[str, list[dict]] = {}
     for item in items:
-        by_category.setdefault(item.get("group") or "Ostatní", []).append(item)
+        by_group.setdefault(item.get("group") or OSTATNI, []).append(item)
 
-    for group, group_items in by_category.items():
-        lines.append(f"<b>{html.escape(group)}</b>")
-        for item in group_items:
-            price = _fmt_czk(item["price_czk"])
-            ratio = item.get("value_ratio")
-            suffix = f" — {_fmt_ratio(ratio)} ceny" if ratio else ""
+    sections: list[tuple[str, list[dict], int]] = []
+    shown = 0
+    for group in GROUP_ORDER + [g for g in by_group if g not in GROUP_ORDER]:
+        group_items = by_group.get(group)
+        if not group_items:
+            continue
+        quota = min(per_group, max(0, max_items - shown))
+        if not quota:
+            break
+        picked = sorted(group_items, key=_rank_key)[:quota]
+        shown += len(picked)
+        sections.append((group, picked, len(group_items)))
+
+    total = len(items)
+    header = (f"📋 <b>Denní souhrn — {shown} nabídek</b>" if shown == total
+              else f"📋 <b>Denní souhrn — {shown} nejlepších z {total}</b>")
+
+    lines = [header, ""]
+    for group, picked, available in sections:
+        count = f" ({len(picked)} z {available})" if available > len(picked) else ""
+        lines.append(f"<b>{html.escape(group)}</b>{count}")
+        for item in picked:
             name = html.escape(item["name"][:90])
             lines.append(f'• <a href="{html.escape(item["url"], quote=True)}">{name}</a>')
-            lines.append(f"  {price}{suffix}")
+            lines.append("  " + " · ".join(_detail(item)))
         lines.append("")
 
     return "\n".join(lines).strip()
 
 
+def _rank_key(item: dict):
+    """Uvnitř sekce rozhoduje popularita, teprve pak sleva.
+
+    U her je to podstatné: seřazeno podle slevy vyhraje vždycky starý titul,
+    o který nikdo nestojí. Položky bez známé popularity (všechno mimo hry)
+    mají stejnou váhu, takže se u nich pořadí řídí slevou jako dřív.
+    """
+    popularity = item.get("popularity")
+    return (-(popularity if popularity is not None else 0.0),
+            item.get("value_ratio") or 1.0)
+
+
+def _detail(item: dict) -> list[str]:
+    parts = [f"<b>{_fmt_czk(item['price_czk'])}</b>"]
+    ratio = item.get("value_ratio")
+    if ratio:
+        parts.append(f"{_fmt_ratio(ratio)} ceny")
+    score, count = item.get("reviews_score"), item.get("reviews_count")
+    if score is not None and count:
+        parts.append(f"★ {score} % z {_fmt_count(count)}")
+    released = (item.get("released") or "")[:4]
+    if released.isdigit():
+        parts.append(released)
+    return parts
+
+
+def _fmt_count(count: int) -> str:
+    if count >= 1_000_000:
+        return f"{count / 1_000_000:.1f} mil.".replace(".", ",")
+    if count >= 1000:
+        return f"{count // 1000} tis."
+    return str(count)
+
+
+def split_message(text: str, limit: int = 3800) -> list[str]:
+    """Rozdělí zprávu na části pod limitem Telegramu, vždy na hranici řádku."""
+    parts: list[str] = []
+    current: list[str] = []
+    length = 0
+    for line in text.split("\n"):
+        if current and length + len(line) + 1 > limit:
+            parts.append("\n".join(current).strip())
+            current, length = [], 0
+        current.append(line)
+        length += len(line) + 1
+    if current:
+        parts.append("\n".join(current).strip())
+    return [p for p in parts if p] or [text]
+
+
 def group_of(offer) -> str:
-    """Škatulka pro souhrn — hrubá, ale čitelná."""
+    """Škatulka pro souhrn. Čtyři sekce, víc by se přestalo číst."""
+    product_type = (offer.extra.get("product_type") or offer.category or "").upper()
+    if product_type in _GAME_TYPES:
+        return HRY
+    if product_type in _SUBSCRIPTION_TYPES:
+        return PREDPLATNE
+
     category = (offer.category or "").lower()
-    if offer.source == "fly4free" or "flight" in category:
-        return "✈️ Cestování"
-    if "hotel" in category or "urlaub" in category or "reisen" in category:
-        return "✈️ Cestování"
-    if offer.source == "kinguin":
-        return "🎮 Klíče a předplatné"
-    if any(w in category for w in ("fashion", "moda", "mode", "bekleidung")):
-        return "👕 Móda"
-    if any(w in category for w in ("elektronik", "electronics", "elektronika")):
-        return "💻 Elektronika"
-    return "🛒 Ostatní"
+    if offer.source == "fly4free" or any(w in category for w in _TRAVEL_WORDS):
+        return CESTOVANI
+    return OSTATNI
+
+
+# Typy produktů z Kinguinu. `INGAME_TOPUP` je navzdory názvu škatulka na
+# předplatné — patří do ní YouTube Premium, Spotify i to Gemini za 65 Kč.
+_GAME_TYPES = {"GAME", "GAME_ACCOUNT", "DLC", "ALTERGIFT", "RANDOM_KEY",
+               "INGAME_CURRENCY", "INGAME_ITEM"}
+_SUBSCRIPTION_TYPES = {"INGAME_TOPUP", "SOFTWARE", "PREPAID"}
+_TRAVEL_WORDS = ("flight", "hotel", "urlaub", "reisen", "travel", "voyage",
+                 "podróże", "podroze", "vakanties")

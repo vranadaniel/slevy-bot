@@ -87,10 +87,37 @@ itad:
   # co ani oficiální minimum nepodleze.
   digest_factor: 1.0    # <= historické minimum → do souhrnu
 
+  # --- popularita her ---
+  # Sleva sama o sobě vytáhne nahoru staré tituly, o které nikdo nestojí:
+  # čím míň lidí hru chce, tím hlouběji jde cena. Proto se u her, které míří
+  # do souhrnu, doptáme na hodnocení hráčů (endpoint /games/info/v2, jedna
+  # položka na dotaz) a spočítáme z něj popularitu 0–1.
+  #
+  # Kolik popularity vyjde při skóre 85 % podle počtu hodnocení:
+  #     100 -> 0,56      500 -> 0,65     1 000 -> 0,69
+  #  10 000 -> 0,82  100 000 -> 0,95
+  # Hry bez hodnocení (Battle.net, EA App — tedy Battlefield nebo Call of Duty)
+  # spadnou na pozici v žebříčku prodejnosti Kinguinu: 0,6 odpovídá zhruba
+  # 670. nejprodávanější položce.
+  info_ttl_days: 30
+  max_info_per_run: 120
+  # Pod tímhle prahem se hra do souhrnu vůbec nedostane. Nula filtr vypne.
+  # 0,6 je zhruba "aspoň dvě stě padesát hodnocení". Když bude sekce s hrami
+  # chodit prázdná, sniž na 0,5; když se v ní pořád objevuje brak, zvyš na 0,7.
+  # Skutečná čísla u konkrétní hry ukáže `--explain`.
+  min_popularity: 0.6
+
 judge:
   enabled: true
   base_url: "https://openrouter.ai/api/v1/chat/completions"
-  model: "google/gemini-2.5-flash-lite"
+  # Ceny na OpenRouteru za milion tokenů (ověřeno 27. 7. 2026):
+  #   deepseek/deepseek-v4-flash    0,14 vstup / 0,28 výstup
+  #   google/gemini-2.5-flash-lite  0,10 vstup / 0,40 výstup
+  # Na naší dávce (~5 000 vstupních, ~2 500 výstupních tokenů) to vyjde na
+  # 0,0014 vs 0,0015 USD, tedy prakticky nastejno. Volba modelu tady nerozhoduje
+  # o nákladech — o těch rozhoduje `max_calls_per_day` a to, že po deduplikaci
+  # většina běhů soudce nezavolá vůbec.
+  model: "deepseek/deepseek-v4-flash"
   max_items_per_call: 25
   max_calls_per_day: 20
   timeout_s: 60
@@ -98,4 +125,10 @@ judge:
 telegram:
   # Kolik položek nejvýš pošle jeden běh jako instant, aby tě bot nezasypal.
   max_instant_per_run: 8
-  max_digest_items: 25
+
+digest:
+  # Souhrn chodí po sekcích, ať trhák na předplatném nezapadne mezi hrami.
+  # Kvóta platí na každou sekci zvlášť — bez ní zaplní hry celou zprávu.
+  per_group: 8
+  # Celkový strop je jen pojistka; delší zpráva se stejně rozdělí na víc částí.
+  max_items: 32

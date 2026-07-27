@@ -42,15 +42,28 @@ sources:
 
     # Odletová letiště. Položka projde, když se některý z výrazů objeví
     # v kategoriích nebo titulku. Německá a polská letiště jsou záměrně vynechaná.
+    #
+    # Výrazy se hledají jako podřetězec, takže české weby potřebují KMENY, ne
+    # první pády: „z Prahy" neobsahuje „praha" a „z Bratislavy" neobsahuje
+    # „bratislava". Bez kmenů by cestujlevne.com nerozpoznal ani jedno letiště.
     airports:
-      - {code: PRG, terms: [prague, praha, prag]}
-      - {code: BRQ, terms: [brno]}
-      - {code: PED, terms: [pardubice]}
-      - {code: OSR, terms: [ostrava]}
-      - {code: VIE, terms: [vienna, wien, viedeň]}
-      - {code: BTS, terms: [bratislava]}
+      - {code: PRG, terms: [prague, prah]}
+      - {code: BRQ, terms: [brno, brně]}
+      - {code: PED, terms: [pardubic]}
+      - {code: OSR, terms: [ostrav]}
+      - {code: VIE, terms: [vienna, wien, víde, viede]}
+      - {code: BTS, terms: [bratislav]}
 
     sites:
+      - name: cestujlevne
+        # Nejbližší zdroj tomu, co chceš: česky, ceny v korunách a odlety
+        # přesně z našich letišť včetně Brna, Ostravy a Pardubic. Feed navíc
+        # sám uvádí světadíl v `<category-web>`, takže se nemusí hádat z názvu.
+        credibility: 0.85
+        currency: CZK
+        feeds:
+          - {url: "https://www.cestujlevne.com/feed"}
+
       - name: travelfree
         # Nejsilnější zdroj pro střední Evropu: 25 položek ve feedu a nové
         # příspěvky každou půlhodinu. `airport` u feedu znamená "sem se dívej

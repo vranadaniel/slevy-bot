@@ -6,6 +6,10 @@ Liší se jen doménou a mírou důvěry.
 
 Ověřeno živými požadavky 27. 7. 2026:
 
+* **cestujlevne.com** — 19 nabídek, česky, ceny v korunách a odlety přesně
+  z našich letišť včetně Brna, Ostravy a Pardubic, které zahraniční weby
+  neznají. Feed navíc sám uvádí světadíl v `<category-web>`. Zdaleka nejbližší
+  tomu, co od bota chceme.
 * **travelfree.info** — 25 položek, čtyři příspěvky za hodinu a půl. Kategorie
   nesou region i odletové město (`Copenhagen`, `Central Europe`). Nejsilnější
   zdroj pro střední Evropu, jaký se dá bez klíče sehnat.
@@ -53,6 +57,8 @@ class TravelSource:
         self.name = site["name"]
         self.feeds: list[dict] = site.get("feeds", []) or []
         self.credibility = float(site.get("credibility", 0.8))
+        # České weby píšou ceny v korunách, zahraniční v eurech.
+        self.currency = str(site.get("currency", "EUR")).upper()
         self.max_age_days = int(cfg.get("sources.travel.max_age_days", 7))
         self.delay_s = float(cfg.get("sources.travel.delay_s", 0.5))
         self.airports: list[dict] = cfg.get("sources.travel.airports", []) or []
@@ -92,6 +98,7 @@ class TravelSource:
         categories = [(c.text or "").lower() for c in item.findall("category")]
         haystack = f"{title.lower()} {' '.join(categories)}"
         is_error_fare = bool(feed.get("error_fare"))
+        region = _region(item)
 
         airport = feed.get("airport") or self._match_airport(haystack)
         if airport is None:
@@ -99,7 +106,7 @@ class TravelSource:
                 return None
             airport = "EU"
 
-        parsed = money.parse_price(title, "EUR")
+        parsed = money.parse_price(title, self.currency)
         if parsed is None:
             return None
         amount, currency = parsed
@@ -116,13 +123,16 @@ class TravelSource:
             currency=currency,
             ref_price_czk=None,  # feed původní cenu neuvádí, řeší to až oracle
             url=link,
-            category="hotel" if "hotel" in haystack else "flight",
+            category=_category(haystack),
             merchant=self.name,
             credibility=ERROR_FARE_CREDIBILITY if is_error_fare else self.credibility,
             extra={
                 "airport": airport,
                 "error_fare": is_error_fare,
                 "categories": categories[:8],
+                # Světadíl přímo z feedu. Kde ho zdroj uvádí, nemusí se hádat
+                # z názvu — a ceník letenek se dá vzít rovnou podle něj.
+                "region": region,
             },
         )
 
@@ -144,6 +154,26 @@ class TravelSource:
                 if term.lower() in haystack:
                     return entry["code"]
         return None
+
+
+def _category(haystack: str) -> str:
+    """Letenka, nebo pobyt? Prahy se u obojího nastavují zvlášť."""
+    if "zájezd" in haystack or "hotel" in haystack or "pobyt" in haystack:
+        return "hotel"
+    return "flight"
+
+
+def _region(item: ET.Element) -> str | None:
+    """Světadíl z feedu, když ho zdroj uvádí.
+
+    cestujlevne.com posílá `<category-web>` se slugem (`evropa`, `asie`,
+    `afrika`, `stredni-amerika`). Hledá se podle lokálního jména značky,
+    ať to funguje i kdyby ji zdroj někdy dal do jmenného prostoru.
+    """
+    for child in item:
+        if child.tag.rsplit("}", 1)[-1] == "category-web" and child.text:
+            return child.text.strip().lower()
+    return None
 
 
 def build_travel_sources(http, fx, cfg) -> list[TravelSource]:

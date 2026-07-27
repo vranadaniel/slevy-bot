@@ -243,6 +243,71 @@ class TestTravelParser:
         assert len(source.fetch()) == 1
 
 
+class TestCzechTravelFeed:
+    """cestujlevne.com — česky, ceny v korunách, světadíl přímo ve feedu."""
+
+    def _source(self, xml):
+        cfg = Config()
+        cfg.raw["sources"]["travel"]["delay_s"] = 0
+        return TravelSource(FakeHttp([xml]), FakeFx(), cfg, {
+            "name": "cestujlevne", "credibility": 0.85, "currency": "CZK",
+            "feeds": [{"url": "https://www.cestujlevne.com/feed"}],
+        })
+
+    def _feed(self, title, categories=("Letenky", "Evropa"), region="evropa"):
+        cats = "".join(f"<category>{c}</category>" for c in categories)
+        web = f"<category-web>{region}</category-web>" if region else ""
+        return FLY_TEMPLATE.format(items=f"""
+  <item>
+    <title>{title}</title>
+    <link>https://www.cestujlevne.com/x</link>
+    <guid>https://www.cestujlevne.com/x</guid>
+    <pubDate>{format_datetime(dt.datetime.now(dt.timezone.utc))}</pubDate>
+    {cats}{web}
+  </item>""")
+
+    def test_czech_declension_is_matched(self):
+        """„z Prahy" neobsahuje „praha" — bez kmenů by nefungovalo nic."""
+        for title, code in [
+            ("Neapol o víkendu z Prahy. Letenky od 1 419 Kč", "PRG"),
+            ("Malta z Bratislavy na podzim. Letenky od 920 Kč", "BTS"),
+            ("Týden v Kalábrii z Ostravy. Zájezd od 13 590 Kč", "OSR"),
+            ("Sahl Hasheesh z Pardubic. Zájezd od 13 690 Kč", "PED"),
+        ]:
+            offers = self._source(self._feed(title)).fetch()
+            assert len(offers) == 1, title
+            assert offers[0].extra["airport"] == code, title
+
+    def test_price_is_read_in_czk_not_eur(self):
+        offers = self._source(self._feed(
+            "Do Boloně na týden z Prahy v říjnu. Letenky od 978 Kč")).fetch()
+
+        assert offers[0].currency == "CZK"
+        assert offers[0].price_czk == pytest.approx(978.0)
+
+    def test_region_comes_from_the_feed(self):
+        offers = self._source(self._feed(
+            "Mexico City z Prahy. Letenky od 13 676 Kč",
+            categories=("Letenky", "Střední Amerika a Karibik"),
+            region="stredni-amerika")).fetch()
+
+        assert offers[0].extra["region"] == "stredni-amerika"
+
+    def test_package_tour_is_not_a_plain_flight(self):
+        flight = self._source(self._feed(
+            "Malta z Bratislavy. Letenky od 920 Kč")).fetch()[0]
+        package = self._source(self._feed(
+            "Zakynthos z Prahy na týden. Zájezd od 15 990 Kč")).fetch()[0]
+
+        assert flight.category == "flight"
+        assert package.category == "hotel"
+
+    def test_missing_region_is_not_an_error(self):
+        offers = self._source(self._feed(
+            "Malta z Bratislavy. Letenky od 920 Kč", region=None)).fetch()
+        assert offers[0].extra["region"] is None
+
+
 class TestBuildSources:
     def test_only_travel_skips_the_catalog(self):
         from src.main import build_sources

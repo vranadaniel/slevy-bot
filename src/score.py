@@ -57,7 +57,9 @@ class Scorer:
 
         self.instant_ratio = float(cfg.get("thresholds.instant_ratio", 0.05))
         self.digest_ratio = float(cfg.get("thresholds.digest_ratio", 0.20))
+        self.by_category: dict = cfg.get("thresholds.by_category", {}) or {}
         self.min_cred_instant = float(cfg.get("thresholds.min_credibility_instant", 0.5))
+        self.min_cred_ai = float(cfg.get("thresholds.min_credibility_ai", 0.8))
         self.require_shipping = bool(cfg.get("thresholds.require_ships_to_cz_for_instant", True))
         # Hry: ITAD sám okamžité upozornění nespouští, viz komentář v _finalize.
         self.itad_digest = float(cfg.get("itad.digest_factor", 1.0))
@@ -110,11 +112,12 @@ class Scorer:
                     candidates.append((offer.credibility * claimed, offer))
                 elif verdict.all_time_low and offer.credibility >= 0.7:
                     candidates.append((offer.credibility * 100, offer))
-            else:
-                # U feedů je teplota to jediné, co o kvalitě něco říká.
-                temperature = offer.extra.get("temperature") or 0
-                if temperature >= 400 or offer.extra.get("error_fare"):
-                    candidates.append((float(temperature or 500), offer))
+            elif offer.credibility >= self.min_cred_ai:
+                # U feedů rozhoduje důvěryhodnost, ať už vznikla z komunitní
+                # teploty, nebo z redakčního výběru. Letenku ani hotel žádný
+                # levný oracle ocenit neumí — bez téhle větve by cestování
+                # mlčelo vždycky.
+                candidates.append((offer.credibility * 100, offer))
 
         candidates.sort(key=lambda pair: pair[0], reverse=True)
         return [offer for _, offer in candidates[:limit]]
@@ -129,6 +132,23 @@ class Scorer:
             self._finalize(verdict)
 
     # ---------- rozhodnutí ----------
+
+    def _thresholds_for(self, offer: Offer) -> tuple[float, float]:
+        """Prahy podle druhu zboží.
+
+        Letenka za 5 % běžné ceny neexistuje. I error fare bývá „jen" o 40–60 %
+        pod cenou, a to je u letenek trhák, o kterém se mluví roky. Jednotný
+        práh nastavený na digitální klíče by cestování umlčel vždycky.
+
+        Klíčem je `offer.category`, tedy povaha zboží — ne zdroj, ze kterého
+        nabídka přišla.
+        """
+        category = (offer.category or "").lower()
+        for key, limits in self.by_category.items():
+            if key.lower() in category:
+                return (float(limits.get("instant_ratio", self.instant_ratio)),
+                        float(limits.get("digest_ratio", self.digest_ratio)))
+        return self.instant_ratio, self.digest_ratio
 
     def _finalize(self, verdict: Verdict) -> None:
         offer = verdict.offer
@@ -175,8 +195,9 @@ class Scorer:
                     f"({itad_low:.0f} Kč{f' na {shop}' if shop else ''})"
                 )
         else:
-            qualifies_instant = ratio <= self.instant_ratio
-            qualifies_digest = ratio <= self.digest_ratio
+            instant_ratio, digest_ratio = self._thresholds_for(offer)
+            qualifies_instant = ratio <= instant_ratio
+            qualifies_digest = ratio <= digest_ratio
 
             # Vlastní historie je natolik důvěryhodná, že hluboký propad na
             # historické minimum stojí za okamžitou zprávu i bez extrémního poměru.

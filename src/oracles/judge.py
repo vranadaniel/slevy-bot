@@ -32,6 +32,10 @@ Pro každou položku odhadni REÁLNOU BĚŽNOU CENU v korunách — tedy kolik b
 člověk normálně zaplatil u oficiálního prodejce. U předplatného počítej celou
 uvedenou dobu (18 měsíců předplatného za 490 Kč/měsíc = 8820 Kč).
 
+U LETENEK odhadni obvyklou cenu té trasy v běžném období, ne nejnižší, jaká kdy
+byla. U HOTELŮ a zájezdů obvyklou cenu za stejný počet nocí ve stejné destinaci
+a sezóně. Cena v názvu bývá za osobu a zpáteční; drž se toho, co je v názvu.
+
 Buď střízlivý. Když položku neznáš nebo je to bezcenná šunta, dej real_value_czk
 nulu. Radši podhodnoť než nadhodnoť — falešný poplach je horší než zmeškaná sleva.
 

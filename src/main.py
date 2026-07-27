@@ -1,6 +1,7 @@
 """Orchestrace běhu.
 
     python -m src.main --dry-run              projde zdroje, nic neodešle ani nezapíše
+    python -m src.main --only travel          rychlý běh jen na letenkách a hotelech
     python -m src.main --dry-run --explain X  rozepíše signály u konkrétní položky
     python -m src.main --bootstrap            první běh: označí feedy za viděné, nealertuje
     python -m src.main                        ostrý sken s okamžitými upozorněními
@@ -28,22 +29,36 @@ from .oracles.refs import ReferenceOracle
 from .score import DIGEST, INSTANT, Scorer
 from .shipping import ShippingPolicy
 from .sources.base import CATALOG
-from .sources.fly4free import Fly4FreeSource
 from .sources.kinguin import KinguinSource
 from .sources.pepper import build_pepper_sources
+from .sources.travel import build_travel_sources
 from .store import Store
 
 log = logging.getLogger("slevy")
 
 
-def build_sources(http, fx, cfg) -> list:
+def build_sources(http, fx, cfg, only: str | None = None) -> list:
+    """Zdroje k projití. `only` omezí běh na jednu rodinu zdrojů.
+
+    Cestovatelské feedy se vyplatí číst častěji než katalog — error fare mizí
+    během hodin, kdežto klíč k Windows počká. `--only travel` proto umí projít
+    jen je, za pár sekund a šest požadavků.
+    """
+    families = {
+        "kinguin": lambda: [KinguinSource(http, fx, cfg)],
+        "pepper": lambda: build_pepper_sources(http, fx, cfg),
+        "travel": lambda: build_travel_sources(http, fx, cfg),
+    }
+    if only and only not in families:
+        raise SystemExit(f"Neznámá rodina zdrojů '{only}'. "
+                         f"Na výběr je: {', '.join(families)}.")
+
     sources = []
-    if cfg.get("sources.kinguin.enabled", True):
-        sources.append(KinguinSource(http, fx, cfg))
-    if cfg.get("sources.pepper.enabled", True):
-        sources.extend(build_pepper_sources(http, fx, cfg))
-    if cfg.get("sources.fly4free.enabled", True):
-        sources.append(Fly4FreeSource(http, fx, cfg))
+    for family, build in families.items():
+        if only and family != only:
+            continue
+        if cfg.get(f"sources.{family}.enabled", True):
+            sources.extend(build())
     return sources
 
 
@@ -63,7 +78,7 @@ def run_scan(cfg, args) -> int:
     store = Store(cfg.db_path)
     fx = load_fx(http, store)
 
-    sources = build_sources(http, fx, cfg)
+    sources = build_sources(http, fx, cfg, args.only)
     offers = collect(sources)
     log.info("Celkem %s nabídek z %s zdrojů", len(offers), len(sources))
 
@@ -186,7 +201,7 @@ def run_scan(cfg, args) -> int:
             _queue(store, verdict)
 
     for verdict in verdicts:
-        if verdict.offer.kind != CATALOG:
+        if verdict.offer.kind != CATALOG and not _retry_later(scorer, verdict):
             store.mark_seen(verdict.offer.source, verdict.offer.uid)
 
     store.prune(keep_days=60)
@@ -195,6 +210,20 @@ def run_scan(cfg, args) -> int:
              sent, store.digest_size())
     store.close()
     return 0
+
+
+def _retry_later(scorer, verdict) -> bool:
+    """Má se položka z feedu nechat na příští běh místo označení za viděnou?
+
+    Letenku ani hotel neumí ocenit žádný levný oracle, takže hodnota přijde až
+    od AI soudce. Když soudce nedojel (vyčerpaný denní strop, výpadek API),
+    zapsat položku do `seen` by ji umlčelo natrvalo — a to je přesně ten typ
+    nabídky, kvůli které bot existuje. Necháme ji tedy na příště.
+
+    Samo se to zastaví: položka za pár dní vypadne z RSS a víc se nenabídne.
+    """
+    return (verdict.value is None
+            and verdict.offer.credibility >= scorer.min_cred_ai)
 
 
 def drop_unpopular(digest: list, min_popularity: float) -> list:
@@ -428,6 +457,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bootstrap", action="store_true",
                         help="první běh: označí feedy za viděné a nic neodešle")
     parser.add_argument("--digest", action="store_true", help="odešle denní souhrn")
+    parser.add_argument("--only", metavar="RODINA",
+                        help="projde jen jednu rodinu zdrojů: kinguin, pepper, travel")
     parser.add_argument("--dump", metavar="SOUBOR", help="uloží syrové nabídky do JSON")
     parser.add_argument("--no-ai", action="store_true", help="vypne AI soudce")
     parser.add_argument("--test-telegram", action="store_true")

@@ -253,6 +253,29 @@ Prázdná sekce s hrami → sniž na 0,5. Pořád brak → zvedni na 0,7. Skute�
 popularita     0.94  (92 % z 742000 hodnocení, vydáno 2025-05-30)
 ```
 
+### Cestování
+
+Letenky a hotely se chovají jinak než digitální klíče a mají proto vlastní
+prahy — letenka za 5 % běžné ceny neexistuje:
+
+```yaml
+thresholds:
+  by_category:
+    flight: {instant_ratio: 0.45, digest_ratio: 0.70}
+    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70}
+```
+
+Zdroje se přidávají v `config.yaml` pod `sources.travel.sites`, kód se kvůli
+tomu upravovat nemusí. `airport` u feedu znamená „tenhle feed je pro dané
+letiště celý relevantní" — hodí se na tagové feedy typu
+`travelfree.info/tag/prague/feed/`.
+
+Error fare mizí během hodin, takže cestování běží na vlastním rychlém timeru:
+
+```bash
+python -m src.main --only travel     # šest feedů, běh na vteřiny
+```
+
 ### `references.yaml`
 
 Nejužitečnější soubor v projektu. Přidávej si sem, co tě zajímá:

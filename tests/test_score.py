@@ -128,6 +128,46 @@ class TestFeedScoring:
         assert verdict.level == DIGEST
 
 
+class TestTravelScoring:
+    """Cestování má vlastní prahy. Bez nich by mlčelo, ať přidáme zdrojů kolik chceme."""
+
+    def _flight(self, price_czk, value_czk, category="flight", credibility=0.85):
+        return Offer(
+            source="travelfree", kind=FEED, uid="t1",
+            name=f"Flights from Prague to Nepal for €{price_czk / 25:.0f}",
+            price_czk=price_czk, ref_price_czk=value_czk,
+            url="https://www.travelfree.info/x", category=category,
+            merchant="travelfree", credibility=credibility,
+            extra={"airport": "PRG"},
+        )
+
+    def test_half_price_flight_reaches_instant(self, scorer):
+        """Na digitální klíče kalibrovaný práh 5 % by tuhle letenku umlčel."""
+        verdict = scorer.prescore([self._flight(10_000.0, 25_000.0)])[0]
+
+        assert verdict.value_ratio == pytest.approx(0.4)
+        assert verdict.level == INSTANT
+
+    def test_mild_discount_only_reaches_digest(self, scorer):
+        verdict = scorer.prescore([self._flight(16_000.0, 25_000.0)])[0]
+
+        assert verdict.value_ratio == pytest.approx(0.64)
+        assert verdict.level == DIGEST
+
+    def test_ordinary_fare_stays_silent(self, scorer):
+        verdict = scorer.prescore([self._flight(20_000.0, 25_000.0)])[0]
+        assert verdict.level == NONE
+
+    def test_hotel_uses_the_same_thresholds(self, scorer):
+        verdict = scorer.prescore([self._flight(10_000.0, 25_000.0, category="hotel")])[0]
+        assert verdict.level == INSTANT
+
+    def test_kinguin_thresholds_are_untouched(self, scorer):
+        """Práh pro cestování nesmí povolit klíče — 40 % u hry není nález."""
+        offer = _kinguin("Nějaká hra", 10_000.0, ref_czk=25_000.0)
+        assert scorer.prescore([offer])[0].level == NONE
+
+
 class TestAiCandidates:
     def test_only_promising_items_reach_ai(self, scorer):
         offers = [
@@ -144,5 +184,55 @@ class TestAiCandidates:
     def test_already_valued_items_do_not_cost_ai_tokens(self, scorer):
         offer = _kinguin("Google Gemini Top-Up > AI Pro > 18 Months", 65.0,
                          claimed_discount=99)
+        verdicts = scorer.prescore([offer])
+        assert scorer.ai_candidates(verdicts, limit=25) == []
+
+    def test_curated_travel_reaches_ai(self, scorer):
+        """Letenku neocení žádný levný oracle. Bez téhle cesty by se
+        cestování nikdy nedostalo ani k ocenění, natož do zprávy."""
+        offer = Offer(
+            source="travelfree", kind=FEED, uid="t1",
+            name="Flights from Prague to Nepal for €426", price_czk=10_650.0,
+            url="https://www.travelfree.info/x", category="flight",
+            merchant="travelfree", credibility=0.85, extra={"airport": "PRG"},
+        )
+        verdicts = scorer.prescore([offer])
+
+        assert verdicts[0].value is None, "levné oracles letenku ocenit neumí"
+        assert scorer.ai_candidates(verdicts, limit=25) == [offer]
+
+    def test_unvalued_travel_is_kept_for_the_next_run(self, scorer):
+        """Kdyby soudce nedojel a položka se zapsala do `seen`, umlčelo by ji
+        to natrvalo — a to je přesně ta nabídka, kvůli které bot existuje."""
+        from src.main import _retry_later
+
+        offer = Offer(
+            source="travelfree", kind=FEED, uid="t1",
+            name="Flights from Prague to Nepal for €426", price_czk=10_650.0,
+            url="https://www.travelfree.info/x", category="flight",
+            merchant="travelfree", credibility=0.85, extra={"airport": "PRG"},
+        )
+        verdict = scorer.prescore([offer])[0]
+        assert _retry_later(scorer, verdict) is True
+
+    def test_valued_item_is_not_retried(self, scorer):
+        from src.main import _retry_later
+
+        offer = Offer(
+            source="travelfree", kind=FEED, uid="t2",
+            name="Flights from Prague to Nepal for €426", price_czk=10_650.0,
+            ref_price_czk=25_000.0, url="https://www.travelfree.info/x",
+            category="flight", merchant="travelfree", credibility=0.85,
+        )
+        verdict = scorer.prescore([offer])[0]
+        assert _retry_later(scorer, verdict) is False
+
+    def test_lukewarm_feed_item_does_not_cost_ai_tokens(self, scorer):
+        offer = Offer(
+            source="mydealz", kind=FEED, uid="m1", name="Vlažný deal",
+            price_czk=100.0, url="https://www.mydealz.de/deals/x",
+            category="Elektronik", merchant="Amazon",
+            credibility=0.3, extra={"temperature": 150},
+        )
         verdicts = scorer.prescore([offer])
         assert scorer.ai_candidates(verdicts, limit=25) == []

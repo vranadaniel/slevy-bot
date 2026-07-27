@@ -28,9 +28,9 @@ class ShippingPolicy:
         return any(d in category for d in self.digital_categories)
 
     def ships_to_cz(self, offer) -> bool | None:
-        # Kinguin i fly4free jsou svou povahou bez dopravy.
-        if offer.source in ("kinguin", "fly4free"):
-            return True
+        # Klíče, předplatné, letenky a hotely žádnou dopravu nemají. Rozhoduje
+        # o tom povaha nabídky (obchod a kategorie), ne to, z jakého webu přišla
+        # — jinak by každý nový zdroj musel tenhle soubor upravovat.
         if self.is_digital(offer):
             return True
 

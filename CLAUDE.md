@@ -22,6 +22,7 @@ Na Windows nastav `PYTHONIOENCODING=utf-8`, jinak české výstupy spadnou na
 
 ```bash
 python -m src.main --dry-run                 # projde zdroje, nic neodešle ani nezapíše
+python -m src.main --only travel             # jen letenky a hotely, běh na vteřiny
 python -m src.main --dry-run --explain UID   # rozpad signálů u položky (název i uid)
 python -m src.main --dump offers.json        # syrová data ze zdrojů
 python -m src.main --check-itad              # ověří ITAD klíč a měnu odpovědí
@@ -114,6 +115,22 @@ o tom nemáme data, by bylo horší než to poslat.
 předplatné: YouTube Premium, Spotify, ChatGPT i to referenční Gemini za 65 Kč.
 Proto v `notify.group_of` patří do sekce s předplatným, ne mezi hry.
 
+**Cestování má vlastní prahy a bez AI mlčí.** Letenka za 5 % běžné ceny
+neexistuje — i legendární error fare bývá „jen" o 40–60 % pod cenou. Proto
+`thresholds.by_category` s klíčem `flight`/`hotel` na 0,45 a 0,70. Zároveň
+letenku ani hotel neumí ocenit žádný levný oracle, takže hodnota přijde vždycky
+až od AI soudce; do výběru je pouští `min_credibility_ai`. Přidat cestovatelské
+zdroje bez těchhle dvou věcí nedoručí ani jednu zprávu navíc — změřeno.
+
+**Feedová položka, kterou se nepodařilo ocenit, se nezapisuje do `seen`.**
+Viz `_retry_later` v `main.py`. Zápis by ji umlčel natrvalo, přestože hodnota
+mohla přijít příští běh (vyčerpaný denní strop AI, výpadek API). Nekonečné to
+není: položka za pár dní vypadne z RSS.
+
+**Rychlý sken cestování běží na vlastním timeru.** `--only travel` každých deset
+minut, hlavní sken v :13 a :43. Minuty jsou schválně různé — oba běhy sahají na
+tutéž SQLite databázi. `busy_timeout` ve `store.py` je druhá pojistka.
+
 **`_queue` v `main.py` volá `mark_alerted`.** Není to překlep — bez toho by se
 katalogové položky vracely do souhrnu každý večer znovu.
 
@@ -143,8 +160,13 @@ všechny. Teplota je v titulku (`^\d+°`), cena a obchod v atributech
 `<pepper:merchant>`. Čtyři národní zápisy čísel řeší `src/money.py`; parser
 vyžaduje symbol měny, jinak by z „modern 4 hotel … from €34" vypadla cena 4.
 
-**fly4free** — RSS, tři feedy. Error-fare feedy jsou z velké části archiv
-z let 2020–2021, proto `max_age_days`.
+**Cestování** (`sources/travel.py`) — RSS, jeden parser na všechny weby.
+`travelfree.info` je nejsilnější zdroj pro střední Evropu (25 položek, nové
+příspěvky každou půlhodinu) a podporuje tagové feedy pro jednotlivá města;
+`airport` u feedu znamená „sem se dívej celé". `fly4free.com` má error-fare
+feedy z velké části jako archiv z let 2020–2021, proto `max_age_days`.
+Ověřeno a nefunguje: `secretflying.com/feed/` vrací HTML, `fly4free.pl`
+error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.
 
 **ITAD** — dva dávkové endpointy, cache v SQLite: překlad názvů natrvalo
 (i nenalezené, ať se marné dotazy neopakují), minima s TTL.

@@ -32,16 +32,14 @@ sources:
       - {name: dealabs,    domain: www.dealabs.com,    currency: EUR, feeds: [hot]}
       - {name: pepperpl,   domain: www.pepper.pl,      currency: PLN, feeds: [hot, new]}
 
-  fly4free:
+  # Cestování: letenky, hotely a zájezdy. Jeden parser na všechny weby.
+  travel:
     enabled: true
     delay_s: 0.5
     # Error-fare feedy jsou z velké části archiv z let 2020–2021. Bez filtru stáří
     # by první běh poslal šest let staré nabídky.
     max_age_days: 7
-    feeds:
-      - {url: "https://www.fly4free.com/feed/", error_fare: false}
-      - {url: "https://www.fly4free.com/flight-deals/error-fare/feed/", error_fare: true}
-      - {url: "https://www.fly4free.com/flight-deals/mistake-fare/feed/", error_fare: true}
+
     # Odletová letiště. Položka projde, když se některý z výrazů objeví
     # v kategoriích nebo titulku. Německá a polská letiště jsou záměrně vynechaná.
     airports:
@@ -52,11 +50,43 @@ sources:
       - {code: VIE, terms: [vienna, wien, viedeň]}
       - {code: BTS, terms: [bratislava]}
 
+    sites:
+      - name: travelfree
+        # Nejsilnější zdroj pro střední Evropu: 25 položek ve feedu a nové
+        # příspěvky každou půlhodinu. `airport` u feedu znamená "sem se dívej
+        # celé" — tagové feedy podchytí i to, co už z hlavního proudu vypadlo.
+        # Tagy `bratislava` a `brno` existují, ale poslední příspěvek je z října
+        # 2025, resp. 2019; Bratislavu stejně zachytí hlavní feed.
+        credibility: 0.85
+        feeds:
+          - {url: "https://www.travelfree.info/feed/"}
+          - {url: "https://www.travelfree.info/tag/prague/feed/", airport: PRG}
+          - {url: "https://www.travelfree.info/tag/vienna/feed/", airport: VIE}
+
+      - name: fly4free
+        credibility: 0.8
+        feeds:
+          - {url: "https://www.fly4free.com/feed/"}
+          - {url: "https://www.fly4free.com/flight-deals/error-fare/feed/", error_fare: true}
+          - {url: "https://www.fly4free.com/flight-deals/mistake-fare/feed/", error_fare: true}
+
 thresholds:
   # Rozhoduje jen procento slevy, absolutní cenový strop není.
   instant_ratio: 0.05          # <= 5 % reálné hodnoty -> pingne hned
   digest_ratio: 0.20           # <= 20 % -> do denního souhrnu
   min_credibility_instant: 0.5 # nízká důvěryhodnost nikdy nejde jako INSTANT
+  # Od jaké důvěryhodnosti se u feedů ptáme AI soudce. 0,8 odpovídá 400° na
+  # Pepperu a zároveň pouští redakčně vybírané letenky a hotely — ty žádný
+  # levný oracle ocenit neumí, takže bez AI by cestování mlčelo vždycky.
+  min_credibility_ai: 0.8
+
+  # Prahy podle druhu zboží. Klíč se hledá jako podřetězec v `Offer.category`.
+  # Letenka za 5 % běžné ceny neexistuje; i legendární error fare bývá "jen"
+  # o 40-60 % pod cenou. Jednotný práh nastavený na digitální klíče by
+  # cestování umlčel vždycky, ať přidáme zdrojů kolik chceme.
+  by_category:
+    flight: {instant_ratio: 0.45, digest_ratio: 0.70}
+    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70}
   # Fyzické zboží z ciziny bez potvrzeného doručení do ČR nikdy nejde jako INSTANT.
   require_ships_to_cz_for_instant: true
 
@@ -119,7 +149,10 @@ judge:
   # většina běhů soudce nezavolá vůbec.
   model: "deepseek/deepseek-v4-flash"
   max_items_per_call: 25
-  max_calls_per_day: 20
+  # Rychlý sken cestování běží každých deset minut a pokaždé může přinést pár
+  # nových letenek, které jinak nikdo neocení. Strop je proto vyšší než dřív;
+  # jsou to malé dávky, takže i vyčerpaný strop stojí jednotky centů denně.
+  max_calls_per_day: 60
   timeout_s: 60
 
 telegram:

@@ -1,6 +1,6 @@
 """Parsery feedů.
 
-XML se skládá v testu, ne ze statického souboru — u fly4free totiž záleží na
+XML se skládá v testu, ne ze statického souboru — u cestování totiž záleží na
 stáří položky a zamrzlé datum by test časem rozbilo.
 """
 
@@ -10,8 +10,8 @@ from email.utils import format_datetime
 import pytest
 
 from src.config import Config
-from src.sources.fly4free import Fly4FreeSource
 from src.sources.pepper import PepperSource
+from src.sources.travel import TravelSource
 
 
 class FakeResponse:
@@ -147,16 +147,17 @@ def _fly_feed(items):
     return FLY_TEMPLATE.format(items="".join(parts))
 
 
-def _fly_source(xml, error_fare=False):
+def _fly_source(xml, error_fare=False, airport=None):
     cfg = Config()
-    cfg.raw["sources"]["fly4free"]["feeds"] = [
-        {"url": "https://example.test/feed/", "error_fare": error_fare}
-    ]
-    cfg.raw["sources"]["fly4free"]["delay_s"] = 0
-    return Fly4FreeSource(FakeHttp([xml]), FakeFx(), cfg)
+    cfg.raw["sources"]["travel"]["delay_s"] = 0
+    feed = {"url": "https://example.test/feed/", "error_fare": error_fare}
+    if airport:
+        feed["airport"] = airport
+    return TravelSource(FakeHttp([xml]), FakeFx(), cfg,
+                        {"name": "fly4free", "credibility": 0.8, "feeds": [feed]})
 
 
-class TestFly4FreeParser:
+class TestTravelParser:
     def test_keeps_flights_from_configured_airports(self):
         xml = _fly_feed([{
             "title": "Turkish Airlines flights from Vienna to Uganda for €497",
@@ -202,3 +203,56 @@ class TestFly4FreeParser:
             "guid": "eu-1", "categories": ["europe"],
         }])
         assert _fly_source(xml, error_fare=False).fetch() == []
+
+    def test_airport_feed_takes_everything_without_matching_a_city(self):
+        """`travelfree.info/tag/prague/feed/` je pro Prahu celý relevantní —
+        podchytí i nabídky, které z hlavního proudu už vypadly."""
+        xml = _fly_feed([{
+            "title": "Turkish Airlines: flights from European cities to Bangkok from €541",
+            "guid": "prg-1", "categories": ["flights"],
+        }])
+        offers = _fly_source(xml, airport="PRG").fetch()
+
+        assert len(offers) == 1
+        assert offers[0].extra["airport"] == "PRG"
+
+    def test_hotel_deal_is_categorised_as_hotel(self):
+        xml = _fly_feed([{
+            "title": "4* hotel in Prague with spa from €89",
+            "guid": "h-1", "categories": ["hotel deals"],
+        }])
+        offers = _fly_source(xml).fetch()
+
+        assert len(offers) == 1
+        assert offers[0].category == "hotel"
+
+    def test_same_deal_in_two_feeds_is_deduplicated(self):
+        """Tatáž nabídka bývá v hlavním i v letištním feedu."""
+        item = {"title": "Flights from Prague to Nepal for €426",
+                "guid": "dup-1", "categories": ["flights"]}
+        cfg = Config()
+        cfg.raw["sources"]["travel"]["delay_s"] = 0
+        xml = _fly_feed([item])
+        source = TravelSource(
+            FakeHttp([xml, xml]), FakeFx(), cfg,
+            {"name": "travelfree", "credibility": 0.85, "feeds": [
+                {"url": "https://example.test/feed/"},
+                {"url": "https://example.test/tag/prague/feed/", "airport": "PRG"},
+            ]},
+        )
+        assert len(source.fetch()) == 1
+
+
+class TestBuildSources:
+    def test_only_travel_skips_the_catalog(self):
+        from src.main import build_sources
+
+        sources = build_sources(FakeHttp([]), FakeFx(), Config(), only="travel")
+        assert sources, "cestovatelské zdroje se mají postavit"
+        assert all(isinstance(s, TravelSource) for s in sources)
+
+    def test_unknown_family_fails_loudly(self):
+        from src.main import build_sources
+
+        with pytest.raises(SystemExit):
+            build_sources(FakeHttp([]), FakeFx(), Config(), only="letenky")

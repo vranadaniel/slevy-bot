@@ -112,6 +112,10 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
+        # Rychlý sken cestování běží na vlastním timeru a může se s hlavním
+        # skenem potkat nad touhle databází. Radši počkat, než spadnout na
+        # "database is locked".
+        self.conn.execute("PRAGMA busy_timeout = 30000")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 

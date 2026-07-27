@@ -161,12 +161,14 @@ GitHub Actions nikdy neuměly zobrazit:
 
 ```
 NEXT                        LEFT     UNIT                ACTIVATES
+Fri 2026-07-24 12:20:00 CET 3min     slevy-travel.timer  slevy-travel.service
 Fri 2026-07-24 12:43:00 CET 21min    slevy-scan.timer    slevy-scan.service
 Fri 2026-07-24 19:09:00 CET 7h       slevy-digest.timer  slevy-digest.service
 ```
 
-Když je v obou řádcích rozumný čas, máš hotovo. Sken poběží v :13 a :43 každou
-hodinu, souhrn v 19:09.
+Když jsou ve všech třech řádcích rozumné časy, máš hotovo. Hlavní sken poběží
+v :13 a :43 každou hodinu, rychlý sken letenek každých deset minut a souhrn
+v 19:09.
 
 ---
 
@@ -216,10 +218,16 @@ Tentýž příkaz jako při instalaci. Je idempotentní a tokeny nepřepisuje:
 bash /opt/slevy-bot/deploy/install.sh
 ```
 
+**Chci vidět, co našly letenky**
+
+```bash
+systemctl start slevy-travel && journalctl -u slevy-travel -n 30 --no-pager
+```
+
 **Chci to celé vypnout**
 
 ```bash
-systemctl disable --now slevy-scan.timer slevy-digest.timer
+systemctl disable --now slevy-scan.timer slevy-travel.timer slevy-digest.timer
 ```
 
 ---

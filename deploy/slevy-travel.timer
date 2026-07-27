@@ -1,0 +1,19 @@
+[Unit]
+Description=Spouští sken cestování každých deset minut
+
+[Timer]
+# Error fare mizí během hodin, někdy minut — půlhodinový cyklus hlavního skenu
+# je na něj pomalý. Šest RSS feedů stojí vteřiny, takže si desetiminutovku
+# můžeme dovolit.
+#
+# Minuty jsou schválně mimo :13 a :43, kdy běží hlavní sken. Ten trvá kolem
+# minuty a oba běhy sahají na tutéž SQLite databázi; takhle se nepotkají.
+OnCalendar=*:00,10,20,30,40,50
+
+Persistent=true
+
+# Bez rozprostření — kolize s hlavním skenem řeší volba minut výš.
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

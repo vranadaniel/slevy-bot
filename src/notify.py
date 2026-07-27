@@ -19,6 +19,7 @@ _SOURCE_LABELS = {
     "dealabs": "dealabs.com",
     "pepperpl": "pepper.pl",
     "fly4free": "fly4free",
+    "travelfree": "travelfree.info",
 }
 
 

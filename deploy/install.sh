@@ -88,7 +88,7 @@ chown root:root "$ENV_FILE"
 log "Instaluji systemd jednotky"
 cp "$APP_DIR"/deploy/slevy-*.service "$APP_DIR"/deploy/slevy-*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now slevy-scan.timer slevy-digest.timer
+systemctl enable --now slevy-scan.timer slevy-travel.timer slevy-digest.timer
 
 log "Hotovo"
 systemctl list-timers 'slevy-*' --no-pager || true

@@ -1,0 +1,24 @@
+[Unit]
+Description=Rychlý sken cestování — letenky a hotely
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=slevy
+Group=slevy
+WorkingDirectory=/opt/slevy-bot
+EnvironmentFile=/etc/slevy-bot/env
+ExecStart=/opt/slevy-bot/.venv/bin/python -m src.main --only travel
+
+# Šest RSS feedů, běh trvá vteřiny. Když se to nestihne, něco je špatně.
+TimeoutStartSec=180
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/slevy-bot/data
+
+[Install]
+WantedBy=multi-user.target

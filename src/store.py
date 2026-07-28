@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS products (
     first_seen TEXT,
     last_seen  TEXT,
     min_ever   REAL,
+    -- Minimum PŘED zápisem aktuální ceny. Bez něj se historické minimum nedá
+    -- poznat: `record_price` běží dřív než scoring, takže `min_ever` už tu
+    -- dnešní cenu obsahuje a "je to nejníž v historii" by platilo vždycky,
+    -- včetně úplně prvního pozorování. Viz `HistoryOracle.is_all_time_low`.
+    prev_min   REAL,
     samples    INTEGER DEFAULT 0,
     PRIMARY KEY (source, uid)
 );
@@ -117,7 +122,18 @@ class Store:
         # "database is locked".
         self.conn.execute("PRAGMA busy_timeout = 30000")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Dopočítá sloupce, které v starších databázích chybí.
+
+        `CREATE TABLE IF NOT EXISTS` existující tabulku nesáhne, takže ostrá
+        databáze na serveru by nový sloupec nikdy nedostala.
+        """
+        existing = {row["name"] for row in self.conn.execute("PRAGMA table_info(products)")}
+        if "prev_min" not in existing:
+            self.conn.execute("ALTER TABLE products ADD COLUMN prev_min REAL")
 
     def close(self) -> None:
         self.conn.commit()
@@ -170,13 +186,17 @@ class Store:
         self.conn.execute(
             """
             INSERT INTO products (source, uid, name, url, category,
-                                  first_seen, last_seen, min_ever, samples)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                                  first_seen, last_seen, min_ever, prev_min, samples)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1)
             ON CONFLICT(source, uid) DO UPDATE SET
                 name      = excluded.name,
                 url       = excluded.url,
                 category  = excluded.category,
                 last_seen = excluded.last_seen,
+                -- Pořadí je podstatné jen zdánlivě: SQLite počítá všechny
+                -- výrazy proti PŮVODNÍMU řádku, takže `prev_min` dostane
+                -- minimum bez dnešní ceny, ať stojí kdekoliv.
+                prev_min  = products.min_ever,
                 min_ever  = MIN(products.min_ever, excluded.min_ever),
                 samples   = products.samples + 1
             """,
@@ -263,7 +283,8 @@ class Store:
 
     def product_stats(self, source: str, uid: str) -> dict[str, Any] | None:
         row = self.conn.execute(
-            "SELECT min_ever, samples, first_seen FROM products WHERE source = ? AND uid = ?",
+            "SELECT min_ever, prev_min, samples, first_seen "
+            "FROM products WHERE source = ? AND uid = ?",
             (source, uid),
         ).fetchone()
         return dict(row) if row else None

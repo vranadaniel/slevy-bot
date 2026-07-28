@@ -104,6 +104,8 @@ class Scorer:
             if verdict.value is not None or verdict.ships_to_cz is False:
                 continue
             offer = verdict.offer
+            if self._history_only(offer):
+                continue
 
             if offer.kind == CATALOG:
                 claimed = offer.extra.get("claimed_discount") or 0
@@ -133,22 +135,36 @@ class Scorer:
 
     # ---------- rozhodnutí ----------
 
+    def _policy_for(self, offer: Offer) -> dict:
+        """Pravidla podle druhu zboží. Klíčem je `offer.category`, tedy povaha
+        zboží — ne zdroj, ze kterého nabídka přišla."""
+        category = (offer.category or "").lower()
+        for key, limits in self.by_category.items():
+            if key.lower() in category:
+                return limits
+        return {}
+
     def _thresholds_for(self, offer: Offer) -> tuple[float, float]:
         """Prahy podle druhu zboží.
 
         Letenka za 5 % běžné ceny neexistuje. I error fare bývá „jen" o 40–60 %
         pod cenou, a to je u letenek trhák, o kterém se mluví roky. Jednotný
         práh nastavený na digitální klíče by cestování umlčel vždycky.
-
-        Klíčem je `offer.category`, tedy povaha zboží — ne zdroj, ze kterého
-        nabídka přišla.
         """
-        category = (offer.category or "").lower()
-        for key, limits in self.by_category.items():
-            if key.lower() in category:
-                return (float(limits.get("instant_ratio", self.instant_ratio)),
-                        float(limits.get("digest_ratio", self.digest_ratio)))
-        return self.instant_ratio, self.digest_ratio
+        limits = self._policy_for(offer)
+        return (float(limits.get("instant_ratio", self.instant_ratio)),
+                float(limits.get("digest_ratio", self.digest_ratio)))
+
+    def _history_only(self, offer: Offer) -> bool:
+        """Smí tuhle katalogovou položku ocenit jen její vlastní historie?
+
+        U her je odhad zvenčí smysluplný — mají doporučenou cenu, kterou zná
+        i AI. U letenky nic takového neexistuje: cena trasy závisí na termínu,
+        sezóně a poptávce, takže „běžná cena" je vždycky jen dohad. A dohad
+        proti ceníku dopravce je přesně ten kruh, kvůli kterému bot hlásil
+        obyčejné letenky jako trháky.
+        """
+        return offer.kind == CATALOG and bool(self._policy_for(offer).get("catalog_history_only"))
 
     def _finalize(self, verdict: Verdict) -> None:
         offer = verdict.offer

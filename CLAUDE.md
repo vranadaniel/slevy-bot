@@ -135,6 +135,23 @@ smí rozhodnout jen vlastní cenová historie; než se nasbírá, správná odpo
 mlčet. Bez tohohle pravidla zaplnily souhrn běžné ceny (Kodaň 892 Kč, Bristol
 947 Kč) hned první běh.
 
+**Zadní vrátka k AI zavírá `catalog_history_only`.** Samotné mlčení
+`FlightOracle` nestačilo: neoceněná položka putuje dál k AI soudci a ta trase
+vymyslí „běžnou cenu", proti které je ceník dopravce z podstaty levný — tentýž
+kruh, jen o patro níž. Proto `thresholds.by_category` u `flight` a `hotel` nese
+`catalog_history_only: true` a `score.ai_candidates` katalogové položky téhle
+kategorie vůbec nepustí dál. U her je odhad zvenčí naopak v pořádku: mají
+doporučenou cenu, kterou AI zná. Letenka nic takového nemá.
+
+**Historické minimum se počítá proti `products.prev_min`, ne `min_ever`.**
+`record_price` v `main.py` běží **dřív** než scoring, takže `min_ever` už
+aktuální cenu obsahuje — proti němu by „historicky nejnižší cena" platila pro
+každou položku hned při prvním pozorování a pro každou nehybnou cenu napořád.
+Změřeno na Ryanairu: všech ~130 tras se takhle první běh označilo za historické
+minimum a šlo k AI soudci. `prev_min` drží minimum před zápisem a porovnání je
+**ostře** menší; stejná cena jako dosud není nález. Sloupec doplňuje `_migrate`,
+protože `CREATE TABLE IF NOT EXISTS` existující databázi nesáhne.
+
 **`FlightOracle` oceňuje jen `category == "flight"`.** Zájezd má v ceně
 i ubytování a stravu, takže cena letenky o něm nevypovídá. Ten ať ocení AI
 soudce, nebo zůstane neoceněný.
@@ -224,6 +241,12 @@ odhady v `flights.yaml`. `uid` je **trasa** (`PRG-BGY`), ne termín; jinak by
 se historie nikdy nenasbírala. Parametr `limit` API odmítá s `InvalidLimit`
 bez ohledu na hodnotu, bez něj vrátí kolem 32 tras na letiště. Pardubice
 neobsluhuje, Brno a Ostrava mají po třech trasách.
+
+Odkaz na rezervaci musí nést **`dateOut` i `dateIn`** a k tomu celou sadu
+parametrů včetně duplicitní `tp*` kopie — viz `_odkaz`. Se samotným
+`originIata`/`destinationIata` stránka jen dlouho točí kolečkem a skončí na
+„Nemáte aktivní vyhledávání". Ověřeno v prohlížeči. Wizz Air tímhle netrpí,
+jeho `/booking/select-flight/PRG/OTP/2026-09-11` funguje.
 
 **Wizz Air** (`sources/wizzair.py`) — druhý katalogový zdroj, doplňuje Ryanair:
 z Vídně nelétá, zato z Bratislavy má 38 tras (Praha 20). Tři věci, bez kterých

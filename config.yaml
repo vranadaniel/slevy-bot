@@ -128,9 +128,16 @@ thresholds:
   # Letenka za 5 % běžné ceny neexistuje; i legendární error fare bývá "jen"
   # o 40-60 % pod cenou. Jednotný práh nastavený na digitální klíče by
   # cestování umlčel vždycky, ať přidáme zdrojů kolik chceme.
+  #
+  # `catalog_history_only` uzavírá zadní vrátka k AI soudci. `FlightOracle`
+  # katalogové zdroje (Ryanair, Wizz Air) schválně neoceňuje, jenže neoceněná
+  # položka putuje právě k AI — a ta trase vymyslí "běžnou cenu", proti které
+  # je ceník dopravce z podstaty levný. Změřeno: obyčejné letenky chodily jako
+  # trháky hned první den. U her je odhad zvenčí v pořádku (mají doporučenou
+  # cenu), u letenky ne.
   by_category:
-    flight: {instant_ratio: 0.45, digest_ratio: 0.70}
-    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70}
+    flight: {instant_ratio: 0.45, digest_ratio: 0.70, catalog_history_only: true}
+    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70, catalog_history_only: true}
   # Fyzické zboží z ciziny bez potvrzeného doručení do ČR nikdy nejde jako INSTANT.
   require_ships_to_cz_for_instant: true
 

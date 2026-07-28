@@ -168,6 +168,68 @@ class TestTravelScoring:
         assert scorer.prescore([offer])[0].level == NONE
 
 
+class TestHistorickeMinimum:
+    """Proč bot první den hlásil obyčejné letenky jako trháky.
+
+    `record_price` v `main.py` běží dřív než scoring, takže `min_ever` už
+    aktuální cenu obsahuje. Historické minimum se proto musí počítat proti
+    ceně PŘED zápisem — jinak platí pro každou položku hned napoprvé.
+    """
+
+    def _ryanair(self, price_czk):
+        return Offer(
+            source="ryanair", kind=CATALOG, uid="PRG-BRS",
+            name="Letenky z Prahy do Bristol", price_czk=price_czk,
+            url="https://www.ryanair.com/x", category="flight",
+            merchant="ryanair", credibility=1.0, extra={"airport": "PRG"},
+        )
+
+    def _observe(self, scorer, price_czk):
+        offer = self._ryanair(price_czk)
+        scorer.store.record_price(offer.source, offer.uid, offer.name,
+                                  offer.url, offer.category, offer.price_czk)
+        return scorer.prescore([offer])[0]
+
+    def test_first_observation_is_not_a_low(self, scorer):
+        assert self._observe(scorer, 918.0).all_time_low is False
+
+    def test_unchanged_price_is_not_a_low(self, scorer):
+        """Nehybná cena by se jinak hlásila jako minimum donekonečna."""
+        self._observe(scorer, 918.0)
+        assert self._observe(scorer, 918.0).all_time_low is False
+
+    def test_real_drop_is_a_low(self, scorer):
+        self._observe(scorer, 918.0)
+        assert self._observe(scorer, 640.0).all_time_low is True
+
+    def test_catalog_flight_never_reaches_the_ai_judge(self, scorer):
+        """Ceník dopravce je z podstaty levnější než „běžná cena", kterou by
+        trase vymyslela AI. Tenhle kruh smí rozseknout jen vlastní historie."""
+        self._observe(scorer, 918.0)
+        verdict = self._observe(scorer, 640.0)
+
+        assert verdict.value is None, "první dny ještě není z čeho ocenit"
+        assert scorer.ai_candidates([verdict], limit=25) == []
+        assert verdict.level == NONE
+
+    def test_history_still_alerts_once_it_exists(self, scorer):
+        """Pojistka nesmí Ryanair umlčet natrvalo — po nasbírání historie
+        má propad projít, a to na základě vlastního měření."""
+        import datetime as dt
+
+        offer = self._ryanair(1800.0)
+        scorer.store.record_price(offer.source, offer.uid, offer.name,
+                                  offer.url, offer.category, offer.price_czk)
+        staré = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=10)).isoformat()
+        scorer.store.conn.execute(
+            "UPDATE price_log SET ts = ? WHERE uid = 'PRG-BRS'", (staré,))
+
+        verdict = self._observe(scorer, 640.0)
+
+        assert verdict.value.origin == "history"
+        assert verdict.level == INSTANT
+
+
 class TestAiCandidates:
     def test_only_promising_items_reach_ai(self, scorer):
         offers = [

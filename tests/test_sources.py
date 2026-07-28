@@ -374,6 +374,49 @@ class TestConditionalFetch:
         assert all(sent == {} for sent in http.sent)
 
 
+class TestRyanairOdkaz:
+    """Odkaz musí vést na konkrétní termín, jinak je k ničemu."""
+
+    def _fare(self, tam="2026-10-13T21:45:00", zpet="2026-10-14T11:30:00"):
+        return {
+            "outbound": {"departureDate": tam,
+                         "arrivalAirport": {"iataCode": "BRS", "name": "Bristol",
+                                            "city": {"name": "Bristol"}}},
+            "inbound": {"departureDate": zpet},
+            "summary": {"price": {"value": 918.48, "currencyCode": "CZK"}},
+        }
+
+    def _offer(self, fare):
+        from src.sources.ryanair import RyanairSource
+        return RyanairSource.__new__(RyanairSource)._to_offer.__func__(
+            _Fake(), "PRG", fare)
+
+    def test_link_carries_both_dates(self):
+        """Bez `dateOut` a `dateIn` skončí rezervační stránka na
+        „Nemáte aktivní vyhledávání" — ověřeno v prohlížeči."""
+        url = self._offer(self._fare()).url
+
+        assert "dateOut=2026-10-13" in url
+        assert "dateIn=2026-10-14" in url
+        assert "originIata=PRG" in url and "destinationIata=BRS" in url
+        # Jejich aplikace si při obnovení stránky čte duplicitní `tp*` sadu.
+        assert "tpStartDate=2026-10-13" in url and "tpEndDate=2026-10-14" in url
+
+    def test_fare_without_dates_falls_back_to_search(self):
+        offer = self._offer(self._fare(tam="", zpet=""))
+        assert offer.url == "https://www.ryanair.com/cz/cs"
+
+
+class _Fake:
+    """Minimum, které `_to_offer` potřebuje — kurz a název zdroje."""
+    name = "ryanair"
+
+    class fx:
+        @staticmethod
+        def to_czk(amount, currency):
+            return amount
+
+
 class TestBuildSources:
     def test_only_travel_skips_kinguin_and_pepper(self):
         """Rychlý timer smí sáhnout jen na cestování. Ryanair do něj patří

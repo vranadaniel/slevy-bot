@@ -87,6 +87,7 @@ class RyanairSource:
 
     def _to_offer(self, origin: str, fare: dict) -> Offer | None:
         outbound = fare.get("outbound") or {}
+        inbound = fare.get("inbound") or {}
         arrival = outbound.get("arrivalAirport") or {}
         price = (fare.get("summary") or {}).get("price") or {}
 
@@ -96,6 +97,9 @@ class RyanairSource:
             return None
 
         city = arrival.get("city", {}).get("name") or arrival.get("name") or dest
+        # API vrací "2026-10-13T21:45:00", odkaz chce jen datum.
+        tam = str(outbound.get("departureDate") or "")[:10]
+        zpet = str(inbound.get("departureDate") or "")[:10]
 
         return Offer(
             source=self.name,
@@ -111,8 +115,7 @@ class RyanairSource:
             # Ryanair neuvádí "původní cenu" a je to tak dobře — tuhle roli
             # zastane vlastní historie.
             ref_price_czk=None,
-            url=f"https://www.ryanair.com/cz/cs/trip/flights/select"
-                f"?originIata={origin}&destinationIata={dest}",
+            url=_odkaz(origin, dest, tam, zpet),
             category="flight",
             merchant="ryanair",
             # Ceníková cena přímo od dopravce. Nikdo si ji nevymýšlí, takže
@@ -122,8 +125,36 @@ class RyanairSource:
                 "airport": origin,
                 "destination": dest,
                 "outbound": outbound.get("departureDate"),
+                "inbound": inbound.get("departureDate"),
             },
         )
+
+
+def _odkaz(origin: str, dest: str, tam: str, zpet: str) -> str:
+    """Odkaz rovnou na konkrétní termín.
+
+    Bez `dateOut` a `dateIn` rezervační stránka jen dlouho točí kolečkem
+    a skončí hláškou „Nemáte aktivní vyhledávání" — ověřeno v prohlížeči.
+    Sada parametrů je celá povinná; `tp*` je duplicitní kopie, kterou si
+    jejich aplikace čte při obnovení stránky.
+    """
+    if not (tam and zpet):
+        # Bez termínů je jediný funkční odkaz obyčejné vyhledávání.
+        return "https://www.ryanair.com/cz/cs"
+
+    params = {
+        "adults": 1, "teens": 0, "children": 0, "infants": 0,
+        "dateOut": tam, "dateIn": zpet,
+        "isConnectedFlight": "false", "isReturn": "true",
+        "discount": 0, "promoCode": "",
+        "originIata": origin, "destinationIata": dest,
+        "tpAdults": 1, "tpTeens": 0, "tpChildren": 0, "tpInfants": 0,
+        "tpStartDate": tam, "tpEndDate": zpet,
+        "tpDiscount": 0, "tpPromoCode": "",
+        "tpOriginIata": origin, "tpDestinationIata": dest,
+    }
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"https://www.ryanair.com/cz/cs/trip/flights/select?{query}"
 
 
 # Jen pro čitelnost názvu v Telegramu; kód letiště zůstává v `extra`.

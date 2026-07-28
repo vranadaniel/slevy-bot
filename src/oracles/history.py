@@ -45,7 +45,20 @@ class HistoryOracle:
         )
 
     def is_all_time_low(self, offer: Offer) -> bool:
+        """Je cena níž, než jsme kdy DŘÍV viděli?
+
+        Porovnává se proti `prev_min`, ne proti `min_ever`. `record_price` totiž
+        v `main.py` běží dřív než scoring, takže `min_ever` už dnešní cenu
+        obsahuje — proti němu by „historicky nejnižší" platilo pro každou
+        položku při prvním pozorování a pro každou nehybnou cenu napořád.
+
+        Změřeno na Ryanairu: všech ~130 tras se takhle hned první běh označilo
+        za historické minimum a šlo k AI soudci, který jim vymyslel běžnou cenu.
+        Odtud ta záplava úplně obyčejných letenek.
+
+        Porovnání je proto OSTŘE menší: stejná cena jako dosud není nález.
+        """
         stats = self.store.product_stats(offer.source, offer.uid)
-        if not stats or stats.get("min_ever") is None:
-            return False
-        return offer.price_czk <= stats["min_ever"] + 0.01
+        if not stats or stats.get("prev_min") is None:
+            return False  # první pozorování není historie
+        return offer.price_czk < stats["prev_min"] - 0.01

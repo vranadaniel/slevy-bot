@@ -232,6 +232,26 @@ medián přes šest let, jedna se sama označuje `**EXPIRED**`. Filtr `max_age_d
 by ji stejně zahodil. Hotely a pobyty chodí hlavním feedem, kde je všechno
 čerstvé — změřeno 24 z 70 položek napříč zdroji, z toho 0 špatně zařazených.
 
+**Velké zahraniční slevové weby nedávají nic**, přestože feedy mají a jsou
+plné čerstvých položek: `urlaubspiraten.de` (45 položek, všechny čerstvé),
+`holidaypirates.com` (44) a `travelpirates.com` (14). Protaženo skutečným
+parserem: přes filtr odletových letišť prošlo **0, 0 a 0**. Odlétá se z Německa
+a Británie. Přidat je by znamenalo pustit i odlety, na které se odsud nedostaneš.
+
+**Další české pokusy:** `akcniletenky.cz` vrací platné RSS, ale **prázdné**.
+`honzovyletenky.cz` má chybný certifikát — obejít se dá jen vypnutím ověřování,
+což je za tuhle nabídku špatná cena. `letuska.cz/blog`, `letenky-levne.cz`
+a tagové feedy cestujlevne.com vracejí 404; `pelikan.cz`, `travelking.cz`
+a `dovolena-levne.cz` vracejí HTML. `secretflying.com` a `flynous.com` odpovídají
+403 i s prohlížečovou hlavičkou.
+
+**Letenková API:** `tequila.kiwi.com` je dnes **jen na pozvání** — portál nemá
+samoobslužnou registraci, jen přihlášení a odkaz na `affiliates@kiwi.com`.
+`api.travelpayouts.com` odpovídá `401`, tedy žije a chce token, který se dá
+získat samoobsluhou. Amadeus se z tohohle prostředí nedal ověřit: `api.amadeus.com`
+ani `test.api.amadeus.com` se nepřeložily přes DNS, zatímco `developers.amadeus.com`
+ano — vypadá to na omezení sítě, ne na mrtvý endpoint.
+
 **Cestovatelské weby:** `secretflying.com/feed/` vrací HTML, `fly4free.pl`
 error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.
 `theflightdeal.com` a `airfarespot.com` fungují, ale mají US trasy.
@@ -274,6 +294,13 @@ odhady v `flights.yaml`. `uid` je **trasa** (`PRG-BGY`), ne termín; jinak by
 se historie nikdy nenasbírala. Parametr `limit` API odmítá s `InvalidLimit`
 bez ohledu na hodnotu, bez něj vrátí kolem 32 tras na letiště. Pardubice
 neobsluhuje, Brno a Ostrava mají po třech trasách.
+
+Kromě `roundTripFares` se čte i **`oneWayFares`**, protože zpáteční vyhledávání
+vidí jen zlomek sítě. Změřeno 28. 7. 2026: zpáteční zná **59 tras**, jednosměrné
+**151** — tedy 92 tras, o kterých bot jinak vůbec neneví. U Vídně je rozdíl
+18 proti 70. Jednosměrné mají **vlastní uid** (`PRG-BGY:ow`): stojí zhruba
+polovinu zpáteční, takže společná časová řada by z každého prohození druhu
+udělala falešný propad ceny.
 
 Odkaz na rezervaci musí nést **`dateOut` i `dateIn`** a k tomu celou sadu
 parametrů včetně duplicitní `tp*` kopie — viz `_odkaz`. Se samotným

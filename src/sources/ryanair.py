@@ -40,6 +40,7 @@ from ..sources.base import CATALOG, Offer
 log = logging.getLogger(__name__)
 
 API = "https://services-api.ryanair.com/farfnd/v4/roundTripFares"
+API_ONE_WAY = "https://services-api.ryanair.com/farfnd/v4/oneWayFares"
 
 
 class RyanairSource:
@@ -53,41 +54,48 @@ class RyanairSource:
         self.days_from = int(cfg.get("sources.ryanair.days_from", 21))
         self.days_to = int(cfg.get("sources.ryanair.days_to", 180))
         self.delay_s = float(cfg.get("sources.ryanair.delay_s", 0.5))
+        self.one_way = bool(cfg.get("sources.ryanair.include_one_way", True))
 
     def fetch(self) -> list[Offer]:
         today = dt.date.today()
-        window = {
-            "outboundDepartureDateFrom": (today + dt.timedelta(days=self.days_from)).isoformat(),
-            "outboundDepartureDateTo": (today + dt.timedelta(days=self.days_to)).isoformat(),
-            "inboundDepartureDateFrom": (today + dt.timedelta(days=self.days_from)).isoformat(),
-            "inboundDepartureDateTo": (today + dt.timedelta(days=self.days_to)).isoformat(),
-            "currency": "CZK",
-        }
+        od = (today + dt.timedelta(days=self.days_from)).isoformat()
+        do = (today + dt.timedelta(days=self.days_to)).isoformat()
+        okno = {"outboundDepartureDateFrom": od, "outboundDepartureDateTo": do,
+                "currency": "CZK"}
+        okno_zpatecni = {**okno, "inboundDepartureDateFrom": od,
+                         "inboundDepartureDateTo": do}
 
         offers: dict[str, Offer] = {}
         for code in self.airports:
-            try:
-                data = self.http.get_json(
-                    API, params={"departureAirportIataCode": code, **window}
-                )
-            except Exception as exc:  # noqa: BLE001 — jedno letiště neshodí zdroj
-                log.warning("Ryanair: letiště %s selhalo: %s", code, exc)
-                continue
-
-            for fare in data.get("fares") or []:
-                offer = self._to_offer(code, fare)
-                if offer is not None:
-                    offers[offer.uid] = offer
-
-            if self.delay_s:
-                time.sleep(self.delay_s)
+            self._nacti(offers, API, {"departureAirportIataCode": code, **okno_zpatecni},
+                        code, one_way=False)
+            if self.one_way:
+                self._nacti(offers, API_ONE_WAY, {"departureAirportIataCode": code, **okno},
+                            code, one_way=True)
 
         log.info("Ryanair: %s tras", len(offers))
         return list(offers.values())
 
-    def _to_offer(self, origin: str, fare: dict) -> Offer | None:
+    def _nacti(self, offers: dict, url: str, params: dict, code: str,
+               one_way: bool) -> None:
+        try:
+            data = self.http.get_json(url, params=params)
+        except Exception as exc:  # noqa: BLE001 — jedno letiště neshodí zdroj
+            log.warning("Ryanair: letiště %s (%s) selhalo: %s", code,
+                        "jednosměrné" if one_way else "zpáteční", exc)
+            return
+
+        for fare in data.get("fares") or []:
+            offer = self._to_offer(code, fare, one_way)
+            if offer is not None:
+                offers[offer.uid] = offer
+
+        if self.delay_s:
+            time.sleep(self.delay_s)
+
+    def _to_offer(self, origin: str, fare: dict, one_way: bool = False) -> Offer | None:
         outbound = fare.get("outbound") or {}
-        inbound = fare.get("inbound") or {}
+        inbound = {} if one_way else (fare.get("inbound") or {})
         arrival = outbound.get("arrivalAirport") or {}
         price = (fare.get("summary") or {}).get("price") or {}
 
@@ -107,8 +115,13 @@ class RyanairSource:
             # Uid je TRASA, ne konkrétní termín. O to celé jde: cena téže trasy
             # se sleduje v čase, takže se pozná, kdy spadla pod vlastní obvyklou
             # hladinu — a to i mimo sezónu, kterou ceník neumí.
-            uid=f"{origin}-{dest}",
-            name=f"Letenky z {_MESTA.get(origin, origin)} do {city}",
+            #
+            # Jednosměrné mají VLASTNÍ uid. Jednosměrná letenka stojí zhruba
+            # polovinu zpáteční, takže smíchat obojí do jedné časové řady by
+            # znamenalo, že se každý přepnutý druh tváří jako propad ceny.
+            uid=f"{origin}-{dest}:ow" if one_way else f"{origin}-{dest}",
+            name=(f"Letenky z {_MESTA.get(origin, origin)} do {city}"
+                  + (" (jednosměrné)" if one_way else "")),
             price_czk=self.fx.to_czk(float(amount), price.get("currencyCode") or "CZK"),
             price_orig=float(amount),
             currency=price.get("currencyCode") or "CZK",
@@ -130,6 +143,7 @@ class RyanairSource:
                 "outbound": outbound.get("departureDate"),
                 "outbound_arrival": outbound.get("arrivalDate"),
                 "inbound": inbound.get("departureDate"),
+                "one_way": one_way,
             },
         )
 
@@ -137,23 +151,26 @@ class RyanairSource:
 def _odkaz(origin: str, dest: str, tam: str, zpet: str) -> str:
     """Odkaz rovnou na konkrétní termín.
 
-    Bez `dateOut` a `dateIn` rezervační stránka jen dlouho točí kolečkem
-    a skončí hláškou „Nemáte aktivní vyhledávání" — ověřeno v prohlížeči.
-    Sada parametrů je celá povinná; `tp*` je duplicitní kopie, kterou si
-    jejich aplikace čte při obnovení stránky.
+    Bez `dateOut` rezervační stránka jen dlouho točí kolečkem a skončí hláškou
+    „Nemáte aktivní vyhledávání" — ověřeno v prohlížeči. Sada parametrů je celá
+    povinná; `tp*` je duplicitní kopie, kterou si jejich aplikace čte při
+    obnovení stránky.
+
+    U jednosměrné letenky se `dateIn` vynechá a `isReturn` je `false`; stránka
+    se pak otevře rovnou v režimu „Jednosměrná". Rovněž ověřeno v prohlížeči.
     """
-    if not (tam and zpet):
-        # Bez termínů je jediný funkční odkaz obyčejné vyhledávání.
+    if not tam:
+        # Bez termínu je jediný funkční odkaz obyčejné vyhledávání.
         return "https://www.ryanair.com/cz/cs"
 
     params = {
         "adults": 1, "teens": 0, "children": 0, "infants": 0,
-        "dateOut": tam, "dateIn": zpet,
-        "isConnectedFlight": "false", "isReturn": "true",
+        "dateOut": tam, "dateIn": zpet or "",
+        "isConnectedFlight": "false", "isReturn": "true" if zpet else "false",
         "discount": 0, "promoCode": "",
         "originIata": origin, "destinationIata": dest,
         "tpAdults": 1, "tpTeens": 0, "tpChildren": 0, "tpInfants": 0,
-        "tpStartDate": tam, "tpEndDate": zpet,
+        "tpStartDate": tam, "tpEndDate": zpet or "",
         "tpDiscount": 0, "tpPromoCode": "",
         "tpOriginIata": origin, "tpDestinationIata": dest,
     }

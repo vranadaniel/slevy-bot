@@ -44,6 +44,12 @@ sources:
     # dál než půl roku Ryanair letové řády teprve otevírá.
     days_from: 21
     days_to: 180
+    # Jednosměrné letenky z `oneWayFares`. Změřeno 28. 7. 2026: zpáteční
+    # vyhledávání zná 59 tras, jednosměrné 151 — tedy 92 tras, o kterých bot
+    # jinak vůbec neví. U Vídně je rozdíl 18 proti 70. Ukládají se pod vlastní
+    # uid (`PRG-BGY:ow`), protože jednosměrná stojí zhruba polovinu zpáteční
+    # a smíchat obojí do jedné cenové řady by vyrobilo falešné propady.
+    include_one_way: true
     # Pardubice Ryanair neobsluhuje, Brno a Ostrava mají po třech trasách.
     # Necháváme je tam — jsou to jediná data o těchhle letištích, jaká máme.
     airports: [PRG, BRQ, OSR, VIE, BTS]

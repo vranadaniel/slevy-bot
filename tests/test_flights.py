@@ -148,13 +148,23 @@ class TestRyanairSource:
     """Jediný katalogový zdroj u cestování — vidíme tutéž trasu opakovaně."""
 
     class FakeHttp:
-        def __init__(self, fares):
+        """Zdroj sahá na dva endpointy, takže i fake musí rozlišovat podle URL.
+
+        Bez toho by se tytéž nabídky vrátily dvakrát a testy by měřily něco
+        jiného, než na co se tváří.
+        """
+
+        def __init__(self, fares, one_way_fares=None):
             self.fares = fares
+            self.one_way_fares = one_way_fares or []
             self.params: list[dict] = []
+            self.urls: list[str] = []
 
         def get_json(self, url, params=None, **kwargs):
             self.params.append(params or {})
-            return {"fares": self.fares}
+            self.urls.append(url)
+            je_jednosmerny = "oneWayFares" in url
+            return {"fares": self.one_way_fares if je_jednosmerny else self.fares}
 
     class FakeFx:
         def to_czk(self, amount, currency):
@@ -168,13 +178,13 @@ class TestRyanairSource:
             "summary": {"price": {"value": price, "currencyCode": "CZK"}},
         }
 
-    def _source(self, fares):
+    def _source(self, fares, one_way_fares=None):
         from src.sources.ryanair import RyanairSource
 
         cfg = load_config()
         cfg.raw["sources"]["ryanair"]["airports"] = ["PRG"]
         cfg.raw["sources"]["ryanair"]["delay_s"] = 0
-        http = self.FakeHttp(fares)
+        http = self.FakeHttp(fares, one_way_fares)
         return RyanairSource(http, self.FakeFx(), cfg), http
 
     def test_route_is_the_identity_not_the_date(self):
@@ -196,6 +206,45 @@ class TestRyanairSource:
         assert offer.category == "flight"
         assert offer.price_czk == pytest.approx(815.0)
         assert offer.extra["airport"] == "PRG"
+
+    def test_one_way_has_its_own_price_history(self):
+        """Jednosměrná stojí zhruba polovinu zpáteční.
+
+        Kdyby obě sdílely uid, střídání druhů by v cenové řadě vypadalo jako
+        propad a bot by hlásil trhák pokaždé, když se pořadí prohodí.
+        """
+        source, _ = self._source([self._fare(price=1600.0)],
+                                 [self._fare(price=800.0)])
+        podle_uid = {o.uid: o for o in source.fetch()}
+
+        assert set(podle_uid) == {"PRG-BGY", "PRG-BGY:ow"}
+        assert podle_uid["PRG-BGY"].price_czk == pytest.approx(1600.0)
+        assert podle_uid["PRG-BGY:ow"].price_czk == pytest.approx(800.0)
+
+    def test_one_way_is_labelled_and_has_no_return_date(self):
+        source, _ = self._source([], [self._fare()])
+        offer = source.fetch()[0]
+
+        assert "jednosměrné" in offer.name
+        assert offer.extra["one_way"] is True
+        assert offer.extra["inbound"] is None
+        # Odkaz se musí otevřít v režimu jednosměrné, jinak Ryanair čeká
+        # návratový termín a stránka zůstane viset.
+        assert "isReturn=false" in offer.url
+        assert "dateOut=2026-09-14" in offer.url
+
+    def test_one_way_can_be_turned_off(self):
+        from src.sources.ryanair import RyanairSource
+
+        cfg = load_config()
+        cfg.raw["sources"]["ryanair"]["airports"] = ["PRG"]
+        cfg.raw["sources"]["ryanair"]["delay_s"] = 0
+        cfg.raw["sources"]["ryanair"]["include_one_way"] = False
+        http = self.FakeHttp([self._fare()], [self._fare()])
+        offers = RyanairSource(http, self.FakeFx(), cfg).fetch()
+
+        assert [o.uid for o in offers] == ["PRG-BGY"]
+        assert not any("oneWayFares" in u for u in http.urls)
 
     def test_broken_airport_does_not_kill_the_source(self):
         from src.sources.ryanair import RyanairSource

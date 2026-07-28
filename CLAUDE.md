@@ -290,9 +290,15 @@ takže se předsazuje `https://www.aviasales.com`.
 **Letenková API:** `tequila.kiwi.com` je dnes **jen na pozvání** — portál nemá
 samoobslužnou registraci, jen přihlášení a odkaz na `affiliates@kiwi.com`.
 `api.travelpayouts.com` odpovídá `401`, tedy žije a chce token, který se dá
-získat samoobsluhou. Amadeus se z tohohle prostředí nedal ověřit: `api.amadeus.com`
-ani `test.api.amadeus.com` se nepřeložily přes DNS, zatímco `developers.amadeus.com`
-ano — vypadá to na omezení sítě, ne na mrtvý endpoint.
+získat samoobsluhou.
+
+**Amadeus je nedosažitelný.** `api.amadeus.com` ani `test.api.amadeus.com` se
+nepřeložily přes DNS — ověřeno nezávisle z vývojového prostředí i z ostrého
+serveru, zatímco `developers.amadeus.com` se přeloží. Nemá smysl to zkoušet
+potřetí. I kdyby se to rozchodilo, bezplatná úroveň je **testovací prostředí
+s nacachovanými daty**, ne živé ceny; na lovce slev nepoužitelné. Ostrá data
+chtějí produkční přístup s platební kartou, kdežto Travelpayouts vrací živé
+ceny a token dává zdarma.
 
 **Cestovatelské weby:** `secretflying.com/feed/` vrací HTML, `fly4free.pl`
 error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.

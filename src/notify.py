@@ -185,6 +185,17 @@ def _fmt_ratio(ratio: float) -> str:
     return f"{pct:.1f} %".replace(".", ",") if pct < 10 else f"{pct:.0f} %"
 
 
+def format_health(zpravy: list[str]) -> str:
+    """Zpráva o zdraví zdrojů.
+
+    Záměrně vypadá jinak než nález — je to provozní hlášení, ne sleva, a nemá
+    se s ní splést při zběžném pohledu na mobil.
+    """
+    radky = ["🩺 <b>Hlídač zdrojů</b>", ""]
+    radky += [f"• {html.escape(z[:200])}" for z in zpravy[:8]]
+    return "\n".join(radky)
+
+
 HRY = "🎮 Hry"
 PREDPLATNE = "🔑 Předplatné a software"
 CESTOVANI = "✈️ Cestování"

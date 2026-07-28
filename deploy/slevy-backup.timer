@@ -1,0 +1,14 @@
+[Unit]
+Description=Slevy bot — denní záloha databáze
+
+[Timer]
+# 4:20 ráno: sken jede v :13 a :43, souhrn v 19:09, takže se to nepotká.
+# Minuta je schválně nekulatá ze stejného důvodu jako u ostatních jednotek.
+OnCalendar=*-*-* 04:20:00
+# Když byl server vypnutý, doháníme — záloha zmeškaná kvůli restartu
+# je přesně ta, která pak chybí.
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

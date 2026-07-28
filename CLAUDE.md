@@ -198,6 +198,26 @@ Viz `_retry_later` v `main.py`. Zápis by ji umlčel natrvalo, přestože hodnot
 mohla přijít příští běh (vyčerpaný denní strop AI, výpadek API). Nekonečné to
 není: položka za pár dní vypadne z RSS.
 
+**ETag se ukládá až po úspěšném parsování.** V `travel._load` je pořadí
+podstatné: kdyby server vrátil 200 s rozbitým tělem a my si značku uložili,
+příští běh pošle `If-None-Match`, dostane 304 a ten feed **zmlkne natrvalo**,
+dokud se obsah náhodou nezmění. Tichá ztráta celého zdroje za jednu vadnou
+odpověď je horší než stáhnout ho příště znovu celý.
+
+**Selhání zdroje se hlásí, ale až napotřetí.** `collect` počítá selhání po
+sobě v `meta` a při třetím pošle zprávu — právě jednou, jinak by zablokovaný
+zdroj psal každých deset minut. Po prvním úspěchu se čítač nuluje a ozve se
+i zotavení. Bez toho bylo selhání tiché: log napsal „přeskakuji" a bot mohl
+týden mlčet, aniž by to vypadalo jinak než na to, že nejsou slevy.
+Aktuální stav ukáže `--stats` v sekci ZDRAVÍ ZDROJŮ.
+
+**Záloha jde přes zálohovací API SQLite, ne přes `cp`.** Sken běží každých
+deset minut, takže kopírování souboru by mohlo trefit rozepsanou transakci.
+`store.backup` navíc nepotřebuje nástroj `sqlite3` v systému. Timer
+`slevy-backup` ji dělá denně ve 4:20 a drží posledních sedm; `Persistent=true`
+dohání zmeškané běhy, protože záloha vynechaná kvůli restartu je přesně ta,
+která pak chybí.
+
 **Rychlý sken cestování běží na vlastním timeru.** `--only travel` každých deset
 minut, hlavní sken v :13 a :43. Minuty jsou schválně různé — oba běhy sahají na
 tutéž SQLite databázi. `busy_timeout` ve `store.py` je druhá pojistka.

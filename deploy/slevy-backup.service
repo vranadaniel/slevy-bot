@@ -1,0 +1,13 @@
+[Unit]
+Description=Slevy bot — záloha databáze
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=slevy
+Group=slevy
+WorkingDirectory=/opt/slevy-bot
+EnvironmentFile=/etc/slevy-bot/env
+ExecStart=/opt/slevy-bot/.venv/bin/python -m src.main --backup
+# Záloha na síť nesahá, takže výpadek internetu ji nesmí shodit.
+Nice=10

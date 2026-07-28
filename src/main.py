@@ -7,6 +7,7 @@
     python -m src.main                        ostrý sken s okamžitými upozorněními
     python -m src.main --digest               odešle denní souhrn
     python -m src.main --stats                co bot nasbíral, bez sahání na síť
+    python -m src.main --backup               konzistentní kopie databáze
     python -m src.main --test-telegram        ověří token a chat_id
     python -m src.main --print-chat-id        vypíše chat_id z posledních zpráv botovi
 """
@@ -22,8 +23,8 @@ import sys
 from .config import load_config
 from .fx import load_fx
 from .net import build_http
-from .notify import (Telegram, format_digest, format_instant, format_term,
-                     group_of)
+from .notify import (Telegram, format_digest, format_health, format_instant,
+                     format_term, group_of)
 from .oracles.declared import DeclaredOracle
 from .oracles.flights import FlightOracle
 from .oracles.history import HistoryOracle
@@ -79,15 +80,38 @@ def build_sources(http, fx, cfg, only: str | None = None, store=None) -> list:
     return sources
 
 
-def collect(sources) -> list:
-    """Stáhne všechny zdroje. Spadlý zdroj se přeskočí, běh pokračuje."""
-    offers = []
+def collect(sources, store=None) -> tuple[list, list[str]]:
+    """Stáhne všechny zdroje. Spadlý zdroj se přeskočí, běh pokračuje.
+
+    Vrací i seznam zdrojů, které si zaslouží zprávu. Bez toho bylo selhání
+    **tiché**: log napsal „přeskakuji" a bot mohl týden mlčet, aniž by to
+    vypadalo jinak než na to, že prostě nejsou slevy.
+
+    Hlásí se až `PRAH_SELHANI` selhání po sobě, a to právě jednou — jinak by
+    zablokovaný zdroj posílal zprávu každých deset minut. Po prvním úspěchu
+    se čítač nuluje, takže příští výpadek zase upozorní.
+    """
+    offers, hlasit = [], []
     for source in sources:
         try:
-            offers.extend(source.fetch())
+            nabidky = source.fetch()
         except Exception as exc:  # noqa: BLE001
             log.error("Zdroj %s selhal a přeskakuji ho: %s", source.name, exc)
-    return offers
+            if store is not None:
+                pocet = store.source_failed(source.name)
+                if pocet == PRAH_SELHANI:
+                    hlasit.append(f"{source.name} selhal {pocet}x po sobě: {exc}")
+            continue
+
+        offers.extend(nabidky)
+        if store is not None and store.source_ok(source.name) >= PRAH_SELHANI:
+            hlasit.append(f"{source.name} zase funguje")
+    return offers, hlasit
+
+
+# Kolik selhání po sobě je porucha, ne výpadek sítě. Cestování běží po deseti
+# minutách, takže tři selhání znamenají půl hodiny ticha.
+PRAH_SELHANI = 3
 
 
 def run_scan(cfg, args) -> int:
@@ -99,7 +123,8 @@ def run_scan(cfg, args) -> int:
     # že druhé spuštění nevypíše nic, a ladění by bylo k ničemu.
     sources = build_sources(http, fx, cfg, args.only,
                             None if args.dry_run else store)
-    offers = collect(sources)
+    # Při dry-runu se zdraví zdrojů nezapisuje — ladicí běh nesmí měnit stav.
+    offers, hlasit = collect(sources, None if args.dry_run else store)
     log.info("Celkem %s nabídek z %s zdrojů", len(offers), len(sources))
 
     if args.dump:
@@ -187,6 +212,14 @@ def run_scan(cfg, args) -> int:
         if cfg.has_telegram else None
     if telegram is None:
         log.warning("Telegram není nastavený, upozornění se jen zapíší do fronty")
+
+    # Porucha zdroje jde ven hned a mimo frontu souhrnu. Čekat s ní do večera
+    # by znamenalo, že o půldenním výpadku víš až po něm.
+    if hlasit:
+        for zprava in hlasit:
+            log.warning("Zdraví zdrojů: %s", zprava)
+        if telegram:
+            telegram.send(format_health(hlasit))
 
     sent = 0
     max_instant = int(cfg.get("telegram.max_instant_per_run", 8))
@@ -422,6 +455,22 @@ def _report_tesne_pod(verdicts, scorer, limit: int = 15) -> None:
     print()
 
 
+def run_backup(cfg) -> int:
+    """Denní záloha databáze. Volá ji systemd timer `slevy-backup`."""
+    store = Store(cfg.db_path)
+    cil_dir = cfg.db_path.parent / cfg.get("backup.dir", "zalohy")
+    keep = int(cfg.get("backup.keep", 7))
+    try:
+        cil = store.backup(cil_dir, keep)
+    finally:
+        store.close()
+
+    velikost = cil.stat().st_size / 1_048_576
+    log.info("Záloha hotová: %s (%.1f MB), držím posledních %s", cil, velikost, keep)
+    print(f"Záloha: {cil} ({velikost:.1f} MB)")
+    return 0
+
+
 def run_stats(cfg) -> int:
     """Co bot nasbíral. Čte jen databázi, na síť nesahá.
 
@@ -467,6 +516,14 @@ def run_stats(cfg) -> int:
 
     print(f"\n--- FRONTA VEČERNÍHO SOUHRNU ---")
     print(f"  Čeká {store.digest_size()} položek.")
+
+    nemocne = store.source_health()
+    print("\n--- ZDRAVÍ ZDROJŮ ---")
+    if nemocne:
+        for jmeno, pocet in sorted(nemocne.items(), key=lambda p: -p[1]):
+            print(f"  {jmeno:<16} selhal {pocet}x po sobě")
+    else:
+        print("  Všechny zdroje se naposledy ozvaly v pořádku.")
 
     volani = store.daily_counter("judge")
     strop = int(cfg.get("judge.max_calls_per_day", 60))
@@ -687,6 +744,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-ai", action="store_true", help="vypne AI soudce")
     parser.add_argument("--test-telegram", action="store_true")
     parser.add_argument("--print-chat-id", action="store_true")
+    parser.add_argument("--backup", action="store_true",
+                        help="uloží konzistentní kopii databáze do data/zalohy")
     parser.add_argument("--stats", action="store_true",
                         help="co bot nasbíral: zralost historie, upozornění, fronta")
     parser.add_argument("--check-itad", action="store_true",
@@ -706,6 +765,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.print_chat_id:
         return run_print_chat_id(cfg)
+    if args.backup:
+        return run_backup(cfg)
     if args.stats:
         return run_stats(cfg)
     if args.check_itad:

@@ -116,12 +116,19 @@ class TravelSource:
             log.debug("%s: %s beze změny", self.name, url)
             return None
 
+        # Parsovat MUSÍME dřív, než si zapamatujeme ETag. Když server vrátí 200
+        # s rozbitým tělem a my si značku uložíme, příští běh pošle
+        # If-None-Match, dostane 304 a feed nám zmlkne NATRVALO — dokud se
+        # obsah náhodou nezmění. Tichá ztráta celého zdroje za jednu vadnou
+        # odpověď je horší než stáhnout ho příště znovu celý.
+        root = ET.fromstring(resp.content)
+
         if self.store is not None:
             for header, key in (("ETag", "etag"), ("Last-Modified", "modified")):
                 if resp.headers.get(header):
                     self.store.set_meta(f"feed:{key}:{url}", resp.headers[header])
 
-        return ET.fromstring(resp.content)
+        return root
 
     def _to_offer(self, item: ET.Element, feed: dict) -> Offer | None:
         title = (item.findtext("title") or "").strip()

@@ -289,6 +289,54 @@ class Store:
         ).fetchone()
         return dict(row) if row else None
 
+    # ---------- záloha ----------
+
+    def backup(self, target_dir: Path, keep: int = 7) -> Path:
+        """Konzistentní kopie databáze i za běhu bota.
+
+        Používá zálohovací API SQLite, ne kopírování souboru: sken běží každých
+        deset minut, takže `cp` by mohl trefit rozepsanou transakci a vyrobit
+        poškozenou zálohu. Tahle cesta navíc nepotřebuje nástroj `sqlite3`
+        v systému — stačí Python, který tu stejně máme.
+
+        Cenová historie roste týdny a je to to nejcennější, co bot má. Ztratit
+        ji kvůli jednomu smazanému souboru by znamenalo začít od nuly.
+        """
+        target_dir.mkdir(parents=True, exist_ok=True)
+        cil = target_dir / f"deals-{dt.datetime.now().strftime('%Y%m%d-%H%M')}.db"
+
+        with sqlite3.connect(cil) as kopie:
+            self.conn.backup(kopie)
+
+        # Staré zálohy pryč, ať disk neroste donekonečna.
+        zalohy = sorted(target_dir.glob("deals-*.db"))
+        for stara in zalohy[:-keep] if keep > 0 else []:
+            stara.unlink(missing_ok=True)
+        return cil
+
+    # ---------- zdraví zdrojů ----------
+
+    def source_failed(self, name: str) -> int:
+        """Zaznamená selhání zdroje a vrátí počet těch po sobě jdoucích."""
+        key = f"health:fail:{name}"
+        pocet = int(self.get_meta(key) or 0) + 1
+        self.set_meta(key, str(pocet))
+        return pocet
+
+    def source_ok(self, name: str) -> int:
+        """Zdroj se ozval. Vrátí, kolikrát předtím selhal (0 = běželo to pořád)."""
+        key = f"health:fail:{name}"
+        pocet = int(self.get_meta(key) or 0)
+        if pocet:
+            self.set_meta(key, "0")
+        return pocet
+
+    def source_health(self) -> dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT k, v FROM meta WHERE k LIKE 'health:fail:%' AND v != '0'"
+        ).fetchall()
+        return {r["k"].split(":", 2)[2]: int(r["v"]) for r in rows}
+
     # ---------- přehled o stavu ----------
 
     def stats_sources(self) -> list[dict]:

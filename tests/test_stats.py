@@ -131,3 +131,116 @@ class TestTesnePodPrahem:
         s.close()
 
         assert "Nic se prahu neblíží" in capsys.readouterr().out
+
+
+class TestZalohaDatabaze:
+    """Cenová historie roste týdny; ztratit ji znamená začít od nuly."""
+
+    def test_backup_is_a_usable_database(self, store, tmp_path):
+        store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 900.0)
+        store.commit()
+
+        cil = store.backup(tmp_path / "zalohy")
+
+        import sqlite3
+        with sqlite3.connect(cil) as kopie:
+            radku = kopie.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        assert radku == 1
+
+    def test_old_backups_are_pruned(self, store, tmp_path):
+        cil_dir = tmp_path / "zalohy"
+        cil_dir.mkdir()
+        for den in range(10):
+            (cil_dir / f"deals-2026070{den}-0420.db").write_bytes(b"x")
+
+        store.backup(cil_dir, keep=3)
+
+        assert len(list(cil_dir.glob("deals-*.db"))) == 3
+
+    def test_keeping_zero_does_not_delete_everything(self, store, tmp_path):
+        """Nula znamená „needit staré", ne „smaž i tu, co jsem právě udělal"."""
+        cil = store.backup(tmp_path / "z", keep=0)
+        assert cil.exists()
+
+
+class TestZdraviZdroju:
+    """Selhání zdroje bylo tiché: log napsal „přeskakuji" a tím to skončilo."""
+
+    def test_single_failure_stays_quiet(self, store):
+        from src.main import collect
+
+        class Rozbity:
+            name = "kinguin"
+
+            def fetch(self):
+                raise RuntimeError("403")
+
+        _, hlasit = collect([Rozbity()], store)
+        assert hlasit == [], "jeden výpadek sítě není porucha"
+
+    def test_third_failure_in_a_row_reports_once(self, store):
+        from src.main import PRAH_SELHANI, collect
+
+        class Rozbity:
+            name = "kinguin"
+
+            def fetch(self):
+                raise RuntimeError("403")
+
+        hlaseni = [collect([Rozbity()], store)[1] for _ in range(PRAH_SELHANI + 2)]
+        neprazdna = [h for h in hlaseni if h]
+
+        assert len(neprazdna) == 1, "zablokovaný zdroj nesmí hlásit každý běh"
+        assert "kinguin" in neprazdna[0][0]
+
+    def test_recovery_is_reported_and_resets(self, store):
+        from src.main import PRAH_SELHANI, collect
+
+        class Rozbity:
+            name = "kinguin"
+
+            def fetch(self):
+                raise RuntimeError("403")
+
+        class Funkcni:
+            name = "kinguin"
+
+            def fetch(self):
+                return []
+
+        for _ in range(PRAH_SELHANI):
+            collect([Rozbity()], store)
+        _, hlasit = collect([Funkcni()], store)
+
+        assert "zase funguje" in hlasit[0]
+        assert store.source_health() == {}, "po zotavení se čítač nuluje"
+
+
+class TestEtagAzPoParsovani:
+    def test_broken_body_does_not_silence_the_feed(self, tmp_path):
+        """200 s rozbitým XML nesmí uložit ETag.
+
+        Kdyby se uložil, další běh pošle If-None-Match, dostane 304 a ten feed
+        nám zmlkne NATRVALO — dokud se obsah náhodou nezmění.
+        """
+        from src.sources.travel import TravelSource
+
+        class RozbitaOdpoved:
+            status_code = 200
+            headers = {"ETag": '"abc"'}
+            content = b"<rss><item>chybi zavorka"
+
+        class FakeHttp:
+            def get(self, url, **kwargs):
+                return RozbitaOdpoved()
+
+        s = Store(tmp_path / "e.db")
+        src = TravelSource(FakeHttp(), None, load_config(),
+                           {"name": "x", "feeds": [{"url": "http://x/feed"}]}, s)
+        try:
+            src._load("http://x/feed")
+        except Exception:
+            pass  # rozbité XML má vyhodit výjimku, o to nejde
+
+        assert s.get_meta("feed:etag:http://x/feed") is None
+        s.close()

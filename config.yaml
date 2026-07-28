@@ -3,6 +3,14 @@
 
 db_path: data/deals.db
 
+backup:
+  # Cenová historie roste týdny a je to to nejcennější, co bot má — ztratit ji
+  # znamená začít od nuly. Zálohuje se přes zálohovací API SQLite, takže je
+  # kopie konzistentní i když zrovna běží sken. Timer `slevy-backup` ji dělá
+  # denně ve 4:20; složka je relativní k `db_path`.
+  dir: zalohy
+  keep: 7
+
 http:
   timeout_s: 25
   retries: 3

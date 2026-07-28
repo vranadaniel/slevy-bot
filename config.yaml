@@ -11,8 +11,17 @@ http:
 sources:
   kinguin:
     enabled: true
-    # 50 stran x 100 = 5000 nejprodávanějších položek, ~50 requestů
-    pages: 50
+    # 100 stran x 100 = celý katalog, na který API pustí (strop je 10 000
+    # produktů, dál nejde). Dřív se bralo 50 stran a druhá polovina se míjela.
+    #
+    # Změřeno 28. 7. 2026: podíl předplatného a softwaru s hloubkou v žebříčku
+    # NEKLESÁ — na poslední straně je stejných ~10 % jako uprostřed. V pořadí
+    # 5000-9999 leželo 479 takových položek, z toho 47 ocenitelných ceníkem,
+    # a mezi nimi Gemini AI Pro na 3 měsíce za 75 Kč. Přesně ta věc, kvůli
+    # které bot vznikl, a nikdy bychom ji neviděli.
+    #
+    # Cena je ~50 požadavků navíc, tedy zhruba 15 s na běh.
+    pages: 100
     page_size: 100
     delay_s: 0.3
     country: CZ

@@ -346,6 +346,13 @@ vypnutím ověřování, což je za deset položek špatná cena.
 ## Externí rozhraní
 
 **Kinguin** — neoficiální interní JSON API, bez klíče. Ceny v **eurocentech**.
+Katalog má **strop 10 000 produktů** (100 stran po 100) a bere se celý. Dřív
+se braly jen první 4, protože se předpokládalo, že hlouběji už nic není —
+**změřeno, že to neplatí**: podíl předplatného a softwaru s hloubkou v žebříčku
+neklesá, na poslední straně je stejných ~10 % jako uprostřed. V pořadí
+5000–9999 leželo 479 takových položek a mezi nimi Gemini AI Pro na 3 měsíce
+za 75 Kč. Na celém katalogu je 956 položek předplatného a softwaru, ceník
+z nich ocení 180.
 Serverové filtry `priceFrom`, `marketingProductType` a `currency` **ignoruje**,
 filtruje se lokálně. Katalog se prochází seřazený podle `bestseller.total`.
 

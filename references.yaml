@@ -108,6 +108,11 @@
   value_czk_per_month: 79
 - match: ["nordvpn"]
   value_czk_per_month: 300
+# Fotografický plán je zlomek ceny All Apps. Obsahuje ale i „creative cloud",
+# takže bez tohohle pravidla by ho obecné ocenilo pětinásobkem a šel by jako
+# okamžité upozornění — změřeno na hloubce katalogu, 230 Kč vycházelo na 4,8 %.
+- match: ["adobe", "photography"]
+  value_czk_per_month: 330
 - match: ["adobe", "creative cloud"]
   value_czk_per_month: 1600
 - match: ["canva", "pro"]
@@ -123,6 +128,10 @@
   value_czk_per_month: 100
 - match: ["avast", "secureline"]
   value_czk_per_month: 85
+# Mobilní varianta je výrazně levnější než desktopová. Tentýž případ jako
+# u Adobe: bez konkrétnějšího pravidla by ji obecné přecenilo trojnásobně.
+- match: ["avg ultimate", "mobile"]
+  value_czk_per_month: 45
 - match: ["avg ultimate"]
   value_czk_per_month: 150
 - match: ["avg", "vpn"]
@@ -151,8 +160,12 @@
   value_czk: 3500
 - match: ["3dmark"]
   value_czk: 700
-- match: ["office 2021", "professional"]
-  value_czk: 11000
+# POZOR: pravidlo `office 2021 + professional` na 11 000 Kč tu bylo a bylo
+# špatně. Professional Plus je objemová licence, která se trvale prodává za
+# 400-600 Kč, takže nominální cena je fikce — na celém katalogu z toho vyšlo
+# 4,3 % a šlo by to jako okamžité upozornění při každém běhu. Tentýž důvod,
+# proč sem nepatří Office 2016 ani 2019. Bez toho pravidla spadne na obecné
+# `office 2021` a skončí v souhrnu, kam patří.
 - match: ["office 2021"]
   value_czk: 4500
 - match: ["office 2024"]

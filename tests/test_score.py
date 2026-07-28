@@ -346,3 +346,39 @@ class TestAiCandidates:
         )
         verdicts = scorer.prescore([offer])
         assert scorer.ai_candidates(verdicts, limit=25) == []
+
+
+class TestPrilisHrubaPravidla:
+    """Ceník obchází práh důvěryhodnosti, takže hrubé pravidlo = zpráva navíc.
+
+    Všechny tři případy se objevily až po rozšíření skenu na celý katalog:
+    v pořadí 5000-9999 leží položky, které obecné pravidlo přecení.
+    """
+
+    def test_adobe_photography_is_not_priced_as_all_apps(self, scorer):
+        """Fotografický plán obsahuje „creative cloud", ale stojí zlomek."""
+        offer = _kinguin("Adobe Creative Cloud Photography Plan - 3 Months Subscription",
+                         230.0)
+        verdict = scorer.prescore([offer])[0]
+
+        assert verdict.value.real_value_czk == 330 * 3
+        assert verdict.level != INSTANT
+
+    def test_avg_ultimate_mobile_is_not_priced_as_desktop(self, scorer):
+        offer = _kinguin("AVG Ultimate Mobile 2024 Key (1 Year / 1 Device)", 88.0)
+        verdict = scorer.prescore([offer])[0]
+
+        assert verdict.value.real_value_czk == 45 * 12
+        assert verdict.level != INSTANT
+
+    def test_office_volume_licence_does_not_ping(self, scorer):
+        """Professional Plus se trvale prodává za pár stovek, takže nominálních
+        11 000 Kč je fikce — tentýž důvod, proč sem nepatří Office 2016 a 2019."""
+        for name in ("MS Office 2021 Professional Plus OEM Key",
+                     "MS Office 2021 Professional Plus Retail Key"):
+            assert scorer.prescore([_kinguin(name, 475.0)])[0].level != INSTANT
+
+    def test_full_creative_cloud_keeps_its_price(self, scorer):
+        """Zúžení nesmí rozbít ocenění plné verze."""
+        offer = _kinguin("Adobe Creative Cloud Pro Top-Up > 3 Month Subscription", 695.0)
+        assert scorer.prescore([offer])[0].value.real_value_czk == 1600 * 3

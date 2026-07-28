@@ -237,7 +237,24 @@ error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů n
 `theflightdeal.com` a `airfarespot.com` fungují, ale mají US trasy.
 
 **Herní obchody:** Eneba 400 + IP allowlist, G2A 403, Gamivo 404, Humble 403,
-Reddit vyžaduje OAuth. Fanatical a Steam odpovídají a stojí za zvážení.
+Reddit vyžaduje OAuth.
+
+**Steam jako zdroj nabídek nedává smysl** — `store.steampowered.com/api/
+featuredcategories/` sice vrací čistý JSON se slevou proti MSRP, ale je v něm
+jen **10 položek** (výběr na titulku, ne katalog akcí) a slevy jsou 15–80 %.
+Proti prahu 0,20 pro hry projde do souhrnu jedna z deseti a okamžité upozornění
+nespustí nikdy. `/api/appdetails` funguje a jako *ceník* by smysl dával — jenže
+přesně to už dělá ITAD, který agreguje Steam i ostatní obchody.
+
+**Tequila API od Kiwi.com** odpovídá `403` bez klíče, tedy endpoint žije. Klíč
+si musí zařídit uživatel sám; jestli se novým partnerům pořád vydávají, se bez
+registrace ověřit nedá a účty nezakládáme.
+
+**AppSumo feed nemá** — `/feed/` je 404, `/rss/` vrací HTML. Zbýval by scraping.
+
+**Fyzické zboží:** `de.camelcamelcamel.com/top_drops/feed` funguje (20 položek
+RSS, propady cen na německém Amazonu). Geizhals a honzovyletenky.cz shodily
+spojení na chybě certifikátu.
 
 ## Externí rozhraní
 
@@ -287,6 +304,9 @@ Trasy se mezi běhy **střídají** (`routes_per_run`). Zeptat se na všech 58
 každých deset minut by bylo přes osm tisíc požadavků denně.
 
 **Cestování** (`sources/travel.py`) — RSS, jeden parser na všechny weby.
+`zaletsi.cz` je druhý český zdroj téhož tvaru jako `cestujlevne.com` (koruny,
+odlety z PRG/VIE/BTS/OSR, letenky i zájezdy) a prošel existujícím parserem bez
+jediné úpravy kódu — je to čistě řádek v konfiguraci.
 `travelfree.info` je nejsilnější zdroj pro střední Evropu (25 položek, nové
 příspěvky každou půlhodinu) a podporuje tagové feedy pro jednotlivá města;
 `airport` u feedu znamená „sem se dívej celé". `fly4free.com` má error-fare

@@ -95,6 +95,15 @@ sources:
         feeds:
           - {url: "https://www.cestujlevne.com/feed"}
 
+      - name: zaletsi
+        # Druhý český zdroj, přesně téhož tvaru jako cestujlevne.com: koruny,
+        # odlety z Prahy, Vídně, Bratislavy i Ostravy, letenky i zájezdy.
+        # Existujícím parserem prošel bez jediné úpravy kódu.
+        credibility: 0.85
+        currency: CZK
+        feeds:
+          - {url: "https://zaletsi.cz/feed/"}
+
       - name: travelfree
         # Nejsilnější zdroj pro střední Evropu: 25 položek ve feedu a nové
         # příspěvky každou půlhodinu. `airport` u feedu znamená "sem se dívej

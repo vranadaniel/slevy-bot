@@ -381,6 +381,17 @@ def report(verdicts, instant, digest) -> None:
         print()
 
 
+class _FxKoruny:
+    """Kurz pro ověřovací příkaz: ptáme se rovnou v korunách, převod je identita.
+
+    Existuje proto, aby `--check-travelpayouts` nemusel otevírat databázi.
+    """
+
+    @staticmethod
+    def to_czk(amount, currency):
+        return amount
+
+
 def run_check_travelpayouts(cfg) -> int:
     """Ověří token a ukáže, jak odpověď doopravdy vypadá.
 
@@ -396,8 +407,11 @@ def run_check_travelpayouts(cfg) -> int:
     from .sources.travelpayouts import API, TravelpayoutsSource
 
     http = build_http(cfg)
-    store = Store(cfg.db_path)
-    source = TravelpayoutsSource(http, load_fx(http, store), cfg, store)
+    # Databázi schválně neotvíráme. Ověřovací příkaz se pouští ručně, klidně
+    # pod jiným uživatelem, a založené soubory `-wal`/`-shm` s cizím vlastníkem
+    # by pak shodily ostrý běh pod účtem `slevy`. Kurz tu není potřeba: ptáme
+    # se rovnou v korunách, takže převod je identita.
+    source = TravelpayoutsSource(http, _FxKoruny(), cfg)
     origin = (source.airports or ["PRG"])[0]
     # Token se nikdy nevypisuje, jen jeho délka — stejně jako u --check-itad.
     print(f"Token načten ({len(cfg.travelpayouts_token)} znaků), "
@@ -431,7 +445,6 @@ def run_check_travelpayouts(cfg) -> int:
     if not offers:
         print("  ŽÁDNOU — pole se přejmenovala, oprav mapování")
         print(f"  syrová první nabídka: {rows[0]}")
-    store.close()
     return 0 if offers else 1
 
 

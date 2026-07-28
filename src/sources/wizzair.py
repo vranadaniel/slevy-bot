@@ -8,9 +8,24 @@ Ověřeno živě 27. 7. 2026:
 * `GET  /Api/asset/map` — mapa linek. Z našich letišť jede **20 tras z Prahy
   a 38 z Bratislavy**. Z Vídně Wizz Air podle mapy nelétá; Ryanair to naopak
   pokrývá, takže se ty dva zdroje doplňují.
-* `POST /Api/asset/farechart` — ceny po dnech, rovnou v korunách. Vyžaduje
-  `dayInterval` **aspoň 3**, jinak vrátí `DayIntervalMustBeGreaterOrEqualTo3`.
-  Při `dayInterval: 3` odpoví sedmi dny kolem zadaného data.
+* `POST /Api/asset/farechart` — ceny po dnech, **v eurech** (`currencyCode`
+  v odpovědi je `EUR`, ne CZK; převod řeší `fx`). `dayInterval` musí být
+  v rozmezí **3 až 10** — mimo něj vrátí `DayIntervalMustBeGreaterOrEqualTo3`,
+  resp. `DayIntervalMustBeLessOrEqualTo10`. Vrací `2 × dayInterval + 1` dní
+  kolem zadaného data, tedy 7 při trojce a **21 při desítce**.
+
+  Bereme maximum. Změřeno 28. 7. 2026 na dvanácti trasách: širší okno našlo
+  nižší cenu u **tří z devíti**, jednou o 56 % (Bratislava–Málaga z 90 na 40 €).
+  Stojí to tentýž jeden požadavek, jen se přestaneme dívat jen na jeden týden
+  ze sto osmdesátidenního horizontu.
+
+  Dny bez spoje vracejí `amount: 0.0` a `priceType: "noData"` — s širším oknem
+  jich je víc, takže se filtrují výslovně.
+
+Co Wizz Air **neumí**, ověřeno: `Api/search/CheapFlights` vrací 500,
+`Api/search/timetable` odmítá delší rozsahy (`InvalidTimeDateRange`)
+a farechart s prázdnou cílovou stanicí vrátí `InvalidArrivalStationCode`.
+Obdoba Ryanairova „kamkoliv" tedy neexistuje; seznam tras dává jen mapa linek.
 
 Verze API je v cestě (`be.wizzair.com/29.8.0/…`) a čas od času se zvedne.
 Zjišťuje se proto z jejich webu, ne natvrdo z konfigurace — viz `_verze`.
@@ -37,8 +52,10 @@ WEB = "https://wizzair.com/"
 _VERZE_RE = re.compile(r"be\.wizzair\.com/(\d+\.\d+\.\d+)")
 FALLBACK_VERZE = "29.8.0"
 
-# Minimum, které API vyžaduje; menší hodnotu odmítne validací.
+# Meze, které API vynucuje validací. Okno je 2 × dayInterval + 1 dní,
+# takže desítka znamená 21 dní na jeden požadavek.
 MIN_DAY_INTERVAL = 3
+MAX_DAY_INTERVAL = 10
 
 
 class WizzAirSource:
@@ -52,6 +69,10 @@ class WizzAirSource:
         self.airports: list[str] = cfg.get("sources.wizzair.airports", []) or []
         self.days_ahead = int(cfg.get("sources.wizzair.days_ahead", 45))
         self.routes_per_run = int(cfg.get("sources.wizzair.routes_per_run", 12))
+        # Mimo meze API dotaz odmítne, takže hodnotu z konfigurace ořízneme
+        # radši tady, než abychom celý zdroj shodili na validaci.
+        self.day_interval = max(MIN_DAY_INTERVAL, min(
+            MAX_DAY_INTERVAL, int(cfg.get("sources.wizzair.day_interval", MAX_DAY_INTERVAL))))
         self.delay_s = float(cfg.get("sources.wizzair.delay_s", 0.6))
         self._verze: str | None = None
 
@@ -140,7 +161,7 @@ class WizzAirSource:
                                         "arrivalStation": kam, "date": datum}],
                         "priceType": "regular", "adultCount": 1,
                         "childCount": 0, "infantCount": 0,
-                        "dayInterval": MIN_DAY_INTERVAL,
+                        "dayInterval": self.day_interval,
                         "wdc": False, "isRescueFare": False, "isFlightChange": False,
                     },
                     self._headers(),
@@ -167,6 +188,11 @@ class WizzAirSource:
         """
         ceny = []
         for den in data.get("outboundFlights") or []:
+            # Dny bez spoje mají `amount: 0` a `priceType: "noData"`. Se širším
+            # oknem jich přibylo, takže se zahazují výslovně — nula by jinak
+            # vypadala jako letenka zdarma.
+            if den.get("priceType") == "noData":
+                continue
             cena = (den.get("price") or {}).get("amount")
             mena = (den.get("price") or {}).get("currencyCode")
             if cena and mena:

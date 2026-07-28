@@ -377,3 +377,50 @@ class TestWizzAirSource:
                 raise RuntimeError("mapa nedostupná")
 
         assert WizzAirSource(Broken(), self.FakeFx(), load_config()).fetch() == []
+
+
+class TestWizzAirOkno:
+    """Okno farechart je 2 x dayInterval + 1 dni. API pusti nejvys desitku."""
+
+    def _source(self, day_interval=None):
+        from src.sources.wizzair import WizzAirSource
+
+        cfg = load_config()
+        if day_interval is not None:
+            cfg.raw["sources"]["wizzair"]["day_interval"] = day_interval
+        return WizzAirSource(None, None, cfg)
+
+    def test_default_uses_the_widest_window_api_allows(self):
+        from src.sources.wizzair import MAX_DAY_INTERVAL
+
+        assert self._source().day_interval == MAX_DAY_INTERVAL
+
+    def test_value_above_the_limit_is_clamped(self):
+        """Mimo meze API dotaz odmítne validací a zdroj by zmlkl celý."""
+        from src.sources.wizzair import MAX_DAY_INTERVAL, MIN_DAY_INTERVAL
+
+        assert self._source(99).day_interval == MAX_DAY_INTERVAL
+        assert self._source(1).day_interval == MIN_DAY_INTERVAL
+
+    def test_days_without_a_flight_are_dropped(self):
+        """`noData` má `amount: 0` — bez filtru by z toho byla letenka zdarma."""
+        source = self._source()
+        source.name = "wizzair"
+        source.fx = type("Fx", (), {"to_czk": staticmethod(lambda a, m: a * 25)})()
+
+        data = {"outboundFlights": [
+            {"priceType": "noData", "date": "2026-09-01T00:00:00",
+             "price": {"amount": 0.0, "currencyCode": "EUR"}},
+            {"priceType": "regular", "date": "2026-09-05T00:00:00",
+             "price": {"amount": 34.0, "currencyCode": "EUR"}},
+        ]}
+        offer = source._to_offer("BTS", "BER", data)
+
+        assert offer.price_czk == 34.0 * 25
+        assert offer.extra["outbound"] == "2026-09-05"
+
+    def test_route_without_any_price_is_skipped(self):
+        source = self._source()
+        data = {"outboundFlights": [
+            {"priceType": "noData", "price": {"amount": 0.0, "currencyCode": "EUR"}}]}
+        assert source._to_offer("BTS", "BER", data) is None

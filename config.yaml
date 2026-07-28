@@ -55,11 +55,17 @@ sources:
     airports: [PRG, BRQ, OSR, VIE, BTS]
 
   # Wizz Air — druhý katalogový zdroj. Doplňuje Ryanair: z Vídně nelétá,
-  # zato z Bratislavy má 38 tras. Ceny vrací po dnech, rovnou v korunách.
+  # zato z Bratislavy má 38 tras. Ceny vrací po dnech v EURECH (ne v korunách,
+  # jak se dřív myslelo — převod řeší kurz z ČNB).
   wizzair:
     enabled: true
     delay_s: 0.6
     days_ahead: 45
+    # Okno kolem `days_ahead` je 2 × tahle hodnota + 1 dní. API pustí nejvýš 10,
+    # tedy 21 dní na jeden požadavek. Bereme maximum: změřeno na dvanácti
+    # trasách, že širší okno našlo nižší cenu u tří z devíti, jednou o 56 %.
+    # Stojí to tentýž počet dotazů, jen se přestaneme dívat na jediný týden.
+    day_interval: 10
     # Zeptat se na všech 58 tras při každém běhu by znamenalo přes osm tisíc
     # požadavků denně. Trasy se proto mezi běhy střídají — celý seznam se
     # projde za pár hodin, což u ceny letenky bohatě stačí.

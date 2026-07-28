@@ -91,6 +91,25 @@ class TestJunkMustNotAlert:
         offer = _kinguin("Cokoliv", 7.0, ref_czk=2400.0)
         assert DeclaredOracle().value_of(offer) is None
 
+    def test_trial_does_not_get_the_full_subscription_value(self, scorer):
+        """Zkušební verzi dostane každý zadarmo, takže cenu předplatného nemá.
+
+        Změřeno na živém katalogu: „Discord Nitro – 3 Months Trial (ONLY FOR NEW
+        ACCOUNTS)" za 12 Kč vycházelo na 1,6 % ze 747 Kč a šlo by jako okamžité
+        upozornění. Ceník přitom obchází práh důvěryhodnosti, takže by to nic
+        nezastavilo.
+        """
+        offer = _kinguin("Discord Nitro - 3 Months Trial Subscription Gift", 12.0)
+        verdict = scorer.prescore([offer])[0]
+
+        assert verdict.value is None
+        assert verdict.level == NONE
+
+    def test_normal_discord_nitro_is_still_priced(self, scorer):
+        """Pojistka nesmí spolknout běžné předplatné."""
+        offer = _kinguin("Discord Nitro - 1 Year Subscription Gift", 900.0)
+        assert scorer.prescore([offer])[0].value.origin == "references"
+
     def test_unknown_cheap_item_is_silent(self, scorer):
         offer = _kinguin("Naprosto neznámá hra XYZ", 12.0, credibility=0.9)
         assert scorer.prescore([offer])[0].level == NONE

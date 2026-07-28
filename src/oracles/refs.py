@@ -45,6 +45,10 @@ def parse_months(name: str) -> int | None:
     return None
 
 
+# Zkušební verze nemá cenu plného předplatného — dostane ji každý zadarmo.
+_TRIAL_RE = re.compile(r"\btrial\b|\bzku[šs]ebn", re.IGNORECASE)
+
+
 class ReferenceOracle:
     name = "references"
 
@@ -52,6 +56,14 @@ class ReferenceOracle:
         self.rules = rules or []
 
     def value_of(self, offer: Offer) -> Value | None:
+        # Ceník obchází práh důvěryhodnosti, takže jde rovnou na mobil. Zkušební
+        # verze by tím dostala hodnotu plného předplatného: „Discord Nitro –
+        # 3 Months Trial (ONLY FOR NEW ACCOUNTS)" za 12 Kč vyšlo na 1,6 % ze
+        # 747 Kč a pinglo by jako trhák. Přitom je to trial, který je zdarma.
+        # Ať to ocení AI soudce, nebo ať to zůstane neoceněné.
+        if _TRIAL_RE.search(offer.name or ""):
+            return None
+
         haystack = (offer.name or "").lower()
         for rule in self.rules:
             terms = [t.lower() for t in rule.get("match", [])]

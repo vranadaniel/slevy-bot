@@ -10,6 +10,23 @@
 # value_czk            -> jednorázová hodnota
 #
 # Tenhle soubor si klidně rozšiřuj. Čím víc pravidel, tím míň práce pro AI soudce.
+#
+# POZOR na to, co sem NEPATŘÍ. Ocenění odsud má `confidence` 1,0 a v `_finalize`
+# obchází práh důvěryhodnosti — jde tedy rovnou na mobil. Jedno rozvolněné
+# pravidlo proto neznamená jednu chybu, ale desítky zpráv denně. Dvě skupiny
+# položek se sem schválně nedostaly, obojí ověřeno na živém katalogu:
+#
+# * **Herní měna a předplacené karty** (Robux, krystaly, FC Points, Steam Wallet,
+#   Minecoins, Telegram Stars). Jejich cena je nominální hodnota, takže by šly
+#   ocenit přesně — jenže levné jsou hlavně proto, že jsou REGIONÁLNÍ, a turecký
+#   kód na český účet nemusí projít. Je to tatáž past, kvůli které ITAD nikdy
+#   nespouští okamžité upozornění.
+# * **Objemové licence Office 2016/2019.** Nominálních 12 000 Kč proti klíči za
+#   dvě stovky dává poměr 1,5 % u položky, které je katalog plný. Legitimní
+#   trhák to není, jen jiná distribuční cesta.
+#
+# Ceny jsou české ceníkové k 28. 7. 2026 a jsou to odhady řádu, ne přesná čísla.
+# Ladit se dají kdykoliv; `--explain UID` ukáže, které pravidlo se chytlo.
 
 # --- AI předplatné ---
 - match: ["gemini", "ultra"]
@@ -36,6 +53,8 @@
   value_czk_per_month: 400
 - match: ["github", "copilot"]
   value_czk_per_month: 250
+- match: ["elevenlabs"]
+  value_czk_per_month: 500
 
 # --- Streaming a média ---
 - match: ["youtube", "premium"]
@@ -48,6 +67,39 @@
   value_czk_per_month: 199
 - match: ["hbo max"]
   value_czk_per_month: 199
+- match: ["crunchyroll"]
+  value_czk_per_month: 199
+- match: ["prime video"]
+  value_czk_per_month: 99
+
+# --- Herní předplatné ---
+# Pořadí je podstatné: vyhrává první shoda, takže konkrétní úroveň musí být
+# nad obecnou. Bez toho by Ultimate dostal cenu Essentialu.
+- match: ["game pass", "ultimate"]
+  value_czk_per_month: 439
+- match: ["game pass", "essential"]
+  value_czk_per_month: 249
+- match: ["game pass", "pc"]
+  value_czk_per_month: 329
+- match: ["game pass"]
+  value_czk_per_month: 249
+- match: ["playstation plus"]
+  value_czk_per_month: 199
+- match: ["nintendo switch online"]
+  value_czk_per_month: 60
+# „60 DAYS" není měsíc ani rok, `parse_months` to nevyčte — proto pevná částka.
+- match: ["world of warcraft", "time card"]
+  value_czk: 700
+- match: ["discord nitro"]
+  value_czk_per_month: 249
+
+# --- Seznamky ---
+- match: ["tinder", "platinum"]
+  value_czk_per_month: 599
+- match: ["tinder", "gold"]
+  value_czk_per_month: 449
+- match: ["tinder", "plus"]
+  value_czk_per_month: 299
 
 # --- Cloud a nástroje ---
 - match: ["google one"]
@@ -61,6 +113,33 @@
 - match: ["canva", "pro"]
   value_czk_per_month: 300
 
+# --- Antivirus a VPN ---
+# Prodávají se na roky, takže měsíční sazba × `parse_months` škáluje správně
+# i u tříleté licence. Ceny jsou za jedno zařízení; balíky na deset zařízení
+# tím pádem spíš podstřelíme, což je správný směr chyby.
+- match: ["eset", "premium"]
+  value_czk_per_month: 110
+- match: ["eset"]
+  value_czk_per_month: 100
+- match: ["avast", "secureline"]
+  value_czk_per_month: 85
+- match: ["avg ultimate"]
+  value_czk_per_month: 150
+- match: ["avg", "vpn"]
+  value_czk_per_month: 85
+- match: ["bitdefender", "vpn"]
+  value_czk_per_month: 85
+- match: ["kaspersky", "vpn"]
+  value_czk_per_month: 70
+- match: ["hma"]
+  value_czk_per_month: 85
+- match: ["express vpn"]
+  value_czk_per_month: 250
+- match: ["expressvpn"]
+  value_czk_per_month: 250
+- match: ["adguard"]
+  value_czk: 1500
+
 # --- Software s jednorázovou licencí ---
 - match: ["windows 11 pro"]
   value_czk: 4500
@@ -68,11 +147,17 @@
   value_czk: 3500
 - match: ["windows 10 pro"]
   value_czk: 4500
+- match: ["windows 10 home"]
+  value_czk: 3500
+- match: ["3dmark"]
+  value_czk: 700
 - match: ["office 2021", "professional"]
   value_czk: 11000
 - match: ["office 2021"]
   value_czk: 4500
 - match: ["office 2024"]
   value_czk: 5000
+- match: ["office 365", "family"]
+  value_czk_per_month: 190
 - match: ["microsoft 365"]
   value_czk_per_month: 250

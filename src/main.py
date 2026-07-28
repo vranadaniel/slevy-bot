@@ -6,6 +6,7 @@
     python -m src.main --bootstrap            první běh: označí feedy za viděné, nealertuje
     python -m src.main                        ostrý sken s okamžitými upozorněními
     python -m src.main --digest               odešle denní souhrn
+    python -m src.main --stats                co bot nasbíral, bez sahání na síť
     python -m src.main --test-telegram        ověří token a chat_id
     python -m src.main --print-chat-id        vypíše chat_id z posledních zpráv botovi
 """
@@ -29,7 +30,7 @@ from .oracles.history import HistoryOracle
 from .oracles.itad import ItadOracle
 from .oracles.judge import JudgeOracle
 from .oracles.refs import ReferenceOracle
-from .score import DIGEST, INSTANT, Scorer
+from .score import DIGEST, INSTANT, NONE, Scorer
 from .shipping import ShippingPolicy
 from .sources.base import CATALOG
 from .sources.kinguin import KinguinSource
@@ -168,7 +169,7 @@ def run_scan(cfg, args) -> int:
         digest = drop_unpopular(digest, float(cfg.get("itad.min_popularity", 0.6)))
 
     if args.dry_run:
-        report(verdicts, instant, digest)
+        report(verdicts, instant, digest, scorer)
         store.close()
         return 0
 
@@ -363,7 +364,7 @@ def explain(verdicts, needle: str, itad=None) -> int:
     return 0
 
 
-def report(verdicts, instant, digest) -> None:
+def report(verdicts, instant, digest, scorer=None) -> None:
     print()
     print(f"Vyhodnoceno {len(verdicts)} nabídek")
     print(f"  INSTANT {len(instant)}   DIGEST {len(digest)}")
@@ -380,6 +381,105 @@ def report(verdicts, instant, digest) -> None:
             print(f"  {verdict.offer.price_czk:>8.0f} Kč  {ratio}  pop {pop}  "
                   f"[{origin:<10}] {verdict.offer.name[:60]}")
         print()
+
+    if scorer is not None:
+        _report_tesne_pod(verdicts, scorer)
+
+
+def _report_tesne_pod(verdicts, scorer, limit: int = 15) -> None:
+    """Oceněné nabídky, které práh minuly — a o kolik.
+
+    Tohle je jediný způsob, jak poznat, jestli jsou prahy utažené správně.
+    Prázdná sekce znamená, že se nic neblíží; plná sekce položek těsně nad
+    prahem znamená, že se práh možná ubírá o kus moc.
+
+    Neoceněné položky se sem nedávají: ty práh neminuly, jen jim nikdo neurčil
+    hodnotu, a to je jiná diagnóza.
+    """
+    blizko = []
+    for verdict in verdicts:
+        if verdict.level != NONE or verdict.value_ratio is None:
+            continue
+        _, digest_prah = scorer._thresholds_for(verdict.offer)
+        if digest_prah <= 0:
+            continue
+        # Kolikrát dál je od prahu, než aby prošla. 1,2 znamená "chybělo 20 %".
+        blizko.append((verdict.value_ratio / digest_prah, digest_prah, verdict))
+
+    if not blizko:
+        print("--- TĚSNĚ POD PRAHEM ---")
+        print("  Nic se prahu neblíží.\n")
+        return
+
+    blizko.sort(key=lambda t: t[0])
+    print(f"--- TĚSNĚ POD PRAHEM ({len(blizko)} oceněných nabídek neprošlo) ---")
+    print("  chybělo   cena        poměr  práh   zdroj hodnoty")
+    for odstup, prah, verdict in blizko[:limit]:
+        chybelo = (odstup - 1.0) * 100
+        print(f"  {chybelo:>6.0f} %  {verdict.offer.price_czk:>8.0f} Kč  "
+              f"{verdict.value_ratio * 100:5.1f} %  {prah * 100:3.0f} %  "
+              f"[{verdict.value.origin:<10}] {verdict.offer.name[:46]}")
+    print()
+
+
+def run_stats(cfg) -> int:
+    """Co bot nasbíral. Čte jen databázi, na síť nesahá.
+
+    Vzniklo proto, že po přidání tří katalogových zdrojů u cestování a po
+    zdvojnásobení katalogu Kinguinu nebylo jak zjistit, jestli to celé funguje.
+    Nejdůležitější sloupec je **zralé**: kolik položek už má porovnání proti
+    dřívější ceně, tedy kolik jich `HistoryOracle` vůbec umí ocenit. Dokud je
+    nula, katalogový zdroj mlčí právem — a je dobré to vidět černé na bílém,
+    místo aby to vypadalo jako porucha.
+    """
+    store = Store(cfg.db_path)
+    print(f"Databáze: {cfg.db_path}\n")
+
+    zdroje = store.stats_sources()
+    if not zdroje:
+        print("Katalog je prázdný — bot ještě neproběhl.")
+        store.close()
+        return 0
+
+    print("--- KATALOG: zralost cenové historie ---")
+    print(f"  {'zdroj':<16} {'položek':>8} {'zralé':>7} {'pozor.':>7}  {'první záznam':<12} naposledy")
+    for r in zdroje:
+        podil = 100.0 * (r["zrale"] or 0) / max(1, r["polozek"])
+        print(f"  {r['source']:<16} {r['polozek']:>8} {r['zrale'] or 0:>6} "
+              f"{podil:>3.0f}% {r['pozorovani'] or 0:>7}  "
+              f"{_den(r['nejstarsi']):<12} {_den(r['naposledy'])}")
+
+    pohyb = store.stats_price_moves(7)
+    print(f"\n  Za týden se cena změnila {pohyb['zmen']}x u {pohyb['polozek']} položek.")
+    print("  (do price_log se zapisují jen ZMĚNY, ne každý běh)")
+
+    print(f"\n--- FEEDY ---")
+    print(f"  Zpracovaných příspěvků v tabulce `seen`: {store.stats_seen()}")
+
+    print("\n--- ODESLANÁ UPOZORNĚNÍ ---")
+    for dny, popis in ((1, "24 hodin"), (7, "7 dní"), (30, "30 dní")):
+        radky = store.stats_alerts(dny)
+        if not radky:
+            print(f"  za {popis:<9} nic")
+            continue
+        souhrn = ", ".join(f"{r['source']} {r['level']} {r['pocet']}x" for r in radky[:6])
+        print(f"  za {popis:<9} {sum(r['pocet'] for r in radky):>3}  ({souhrn})")
+
+    print(f"\n--- FRONTA VEČERNÍHO SOUHRNU ---")
+    print(f"  Čeká {store.digest_size()} položek.")
+
+    volani = store.daily_counter("judge")
+    strop = int(cfg.get("judge.max_calls_per_day", 60))
+    print(f"\n--- AI SOUDCE ---")
+    print(f"  Dnes {volani} volání ze stropu {strop}.")
+
+    print("\nCo běží dál po prahem, ukáže `--dry-run` v sekci TĚSNĚ POD PRAHEM.")
+    store.close()
+    return 0
+
+
+def _den(iso: str | None) -> str:
+    return (iso or "")[:10] or "-"
 
 
 class _FxKoruny:
@@ -587,6 +687,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-ai", action="store_true", help="vypne AI soudce")
     parser.add_argument("--test-telegram", action="store_true")
     parser.add_argument("--print-chat-id", action="store_true")
+    parser.add_argument("--stats", action="store_true",
+                        help="co bot nasbíral: zralost historie, upozornění, fronta")
     parser.add_argument("--check-itad", action="store_true",
                         help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
     parser.add_argument("--check-travelpayouts", action="store_true",
@@ -604,6 +706,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.print_chat_id:
         return run_print_chat_id(cfg)
+    if args.stats:
+        return run_stats(cfg)
     if args.check_itad:
         return run_check_itad(cfg)
     if args.check_travelpayouts:

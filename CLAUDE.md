@@ -30,8 +30,23 @@ python -m src.main --test-telegram
 python -m src.main --bootstrap               # označí feedy za viděné, nic nepošle
 ```
 
+```bash
+python -m src.main --stats                   co bot nasbíral, bez sahání na síť
+```
+
 `--explain` je hlavní ladicí nástroj — ukáže cenu, credibility, odkud přišla
 hodnota a proč verdikt dopadl, jak dopadl.
+
+`--stats` odpovídá na otázku „funguje to vůbec". Nejdůležitější sloupec je
+**zralé**: kolik položek už má porovnání proti dřívější ceně, tedy kolik jich
+`HistoryOracle` umí ocenit. Dokud je nula, katalogový zdroj mlčí právem — a je
+dobré to vidět, místo aby to vypadalo jako porucha.
+
+`--dry-run` má sekci **TĚSNĚ POD PRAHEM**: oceněné nabídky, které práh minuly,
+seřazené podle toho, o kolik. Je to jediný způsob, jak poznat, jestli jsou
+prahy utažené správně — plná sekce položek chybějících pár procent znamená, že
+se práh možná ubírá o kus moc. Neoceněné položky se tam schválně nedávají: ty
+práh neminuly, jen jim nikdo neurčil hodnotu, a to je jiná diagnóza.
 
 Tokeny se berou z prostředí: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
 `OPENROUTER_API_KEY`, `ITAD_API_KEY`, `TRAVELPAYOUTS_TOKEN`. Chybějící

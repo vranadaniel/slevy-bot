@@ -289,6 +289,54 @@ class Store:
         ).fetchone()
         return dict(row) if row else None
 
+    # ---------- přehled o stavu ----------
+
+    def stats_sources(self) -> list[dict]:
+        """Zralost cenové historie po zdrojích.
+
+        Klíčové číslo je `zrale`: kolik položek už má aspoň dvě pozorování
+        s odstupem, tedy kolik jich `HistoryOracle` vůbec umí ocenit. Dokud
+        je nula, katalogový zdroj mlčí — a je užitečné vidět, že je to tím,
+        a ne poruchou.
+        """
+        rows = self.conn.execute(
+            """
+            SELECT p.source,
+                   COUNT(*)                                   AS polozek,
+                   SUM(CASE WHEN p.prev_min IS NOT NULL THEN 1 ELSE 0 END) AS zrale,
+                   MIN(p.first_seen)                          AS nejstarsi,
+                   MAX(p.last_seen)                           AS naposledy,
+                   SUM(p.samples)                             AS pozorovani
+            FROM products p
+            GROUP BY p.source
+            ORDER BY polozek DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def stats_alerts(self, days: int) -> list[dict]:
+        since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
+        rows = self.conn.execute(
+            "SELECT source, level, COUNT(*) AS pocet FROM alerts "
+            "WHERE ts >= ? GROUP BY source, level ORDER BY pocet DESC",
+            (since,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def stats_price_moves(self, days: int) -> dict:
+        """Kolik cen se vůbec hýbe. Do `price_log` se zapisují jen změny."""
+        since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS zmen, COUNT(DISTINCT source || '|' || uid) AS polozek "
+            "FROM price_log WHERE ts >= ?",
+            (since,),
+        ).fetchone()
+        return dict(row) if row else {"zmen": 0, "polozek": 0}
+
+    def stats_seen(self) -> int:
+        row = self.conn.execute("SELECT COUNT(*) AS n FROM seen").fetchone()
+        return int(row["n"]) if row else 0
+
     # ---------- feedy: viděné položky ----------
 
     def is_seen(self, source: str, uid: str) -> bool:

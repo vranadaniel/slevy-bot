@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import logging
 import sys
@@ -417,23 +418,53 @@ def run_check_travelpayouts(cfg) -> int:
     print(f"Token načten ({len(cfg.travelpayouts_token)} znaků), "
           f"ptám se na lety z {origin}.\n")
 
-    try:
-        data = http.get_json(API, params=source._params(origin),
-                             headers={"X-Access-Token": cfg.travelpayouts_token,
-                                      "Accept": "application/json"})
-    except Exception as exc:  # noqa: BLE001
-        print(f"Dotaz selhal: {exc}")
-        store.close()
+    headers = {"X-Access-Token": cfg.travelpayouts_token, "Accept": "application/json"}
+    mesic = (dt.date.today() + dt.timedelta(days=source.days_from)).strftime("%Y-%m")
+
+    # Žebřík variant. API na neplatný parametr odpoví 400 a v těle napíše který,
+    # jenže `Http.get` tělo u 4xx zahodí — proto se tu volá session přímo.
+    # Jde o to najít nejbohatší tvar dotazu, který ještě projde: mapování
+    # vzniklo z dokumentace a tohle je ten chybějící měřicí krok.
+    zaklad = {"origin": origin, "currency": "czk"}
+    varianty = [
+        ("jen origin + měna", zaklad),
+        ("+ jednosměrné", {**zaklad, "one_way": "true"}),
+        ("+ řazení podle ceny", {**zaklad, "one_way": "true", "sorting": "price"}),
+        ("+ stránkování", {**zaklad, "one_way": "true", "sorting": "price",
+                           "limit": 100, "page": 1}),
+        ("+ měsíc odletu", {**zaklad, "one_way": "true", "sorting": "price",
+                            "limit": 100, "page": 1, "departure_at": mesic}),
+        ("+ trh CZ", {**zaklad, "one_way": "true", "sorting": "price",
+                      "limit": 100, "page": 1, "departure_at": mesic, "market": "cz"}),
+        ("současný _params()", source._params(origin)),
+    ]
+
+    data, funkcni = None, None
+    for popis, params in varianty:
+        try:
+            resp = http.session.get(API, params=params, headers=headers, timeout=30)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {popis:24} SÍŤ: {exc}")
+            continue
+        telo = (resp.text or "").strip().replace("\n", " ")[:130]
+        if resp.ok:
+            radky = (resp.json() or {}).get("data") or []
+            print(f"  {popis:24} {resp.status_code}  nabídek: {len(radky)}")
+            if radky and data is None:
+                data, funkcni = resp.json(), (popis, params)
+        else:
+            print(f"  {popis:24} {resp.status_code}  {telo}")
+
+    if data is None:
+        print("\nŽádná varianta nevrátila nabídky. Pošli mi tenhle výpis, "
+              "z chybových hlášek poznám, který parametr API nechce.")
         return 1
 
-    rows = (data or {}).get("data") or []
+    rows = data.get("data") or []
+    print(f"\nNejbohatší funkční varianta: {funkcni[0]}")
+    print(f"  parametry: {sorted(funkcni[1])}")
     print(f"Odpověď má klíče: {sorted(data)[:8]}")
     print(f"Nabídek: {len(rows)}\n")
-    if not rows:
-        print("Prázdná odpověď — zkontroluj okno termínů v config.yaml.")
-        store.close()
-        return 1
-
     print(f"Pole první nabídky:\n  {sorted(rows[0])}\n")
 
     offers = [o for o in (source._to_offer(origin, r) for r in rows[:8]) if o]

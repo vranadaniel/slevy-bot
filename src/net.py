@@ -8,6 +8,7 @@ odchytí a přeskočí.
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 import requests
@@ -40,7 +41,10 @@ class Http:
                     backoff = 2 ** attempt
                     log.debug("%s selhalo (%s), zkouším znovu za %ss", url, exc, backoff)
                     time.sleep(backoff)
-        raise RuntimeError(f"Nepodařilo se stáhnout {url}: {last_exc}")
+        # Hlášku z requests je nutné ořezat: nese v sobě celou URL i s query
+        # stringem, takže klíč předaný parametrem by skončil v logu. Stejný
+        # důvod jako v `_describe_error`.
+        raise RuntimeError(f"Nepodařilo se stáhnout {url}: {_bez_query(last_exc)}")
 
     def get_json(self, url: str, **kwargs) -> dict:
         return self.get(url, **kwargs).json()
@@ -55,6 +59,18 @@ class Http:
         if not resp.ok:
             raise RuntimeError(_describe_error(resp))
         return resp.json()
+
+
+_QUERY_RE = re.compile(r"\?\S*")
+
+
+def _bez_query(exc) -> str:
+    """Text výjimky bez query stringů.
+
+    `requests` píše do hlášky celou URL. Kdyby zdroj předával klíč parametrem,
+    ocitl by se rovnou v logu i v tracebacku.
+    """
+    return _QUERY_RE.sub("?…", str(exc))
 
 
 def _describe_error(resp) -> str:

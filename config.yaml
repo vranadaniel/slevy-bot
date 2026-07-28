@@ -83,8 +83,10 @@ sources:
   travelpayouts:
     enabled: true
     delay_s: 1.0
+    # Určuje MĚSÍC odletu, na který se ptáme (`departure_at` bere `2026-08`).
+    # Horní mez tu být nemůže: API nebere okno, ale konkrétní termín — rozsah
+    # půl roku vracel 400.
     days_from: 21
-    days_to: 180
     # Jeden přestup ano, dva už ne — třetí bývá levný na papíře
     # a nepoužitelný v praxi.
     max_transfers: 1

@@ -45,8 +45,9 @@ class TravelpayoutsSource:
         self.store = store
         self.token = cfg.travelpayouts_token
         self.airports: list[str] = cfg.get("sources.travelpayouts.airports", []) or []
+        # Určuje MĚSÍC odletu, na který se ptáme. Horní mez tu být nemůže —
+        # API nebere okno, ale konkrétní termín, viz `_params`.
         self.days_from = int(cfg.get("sources.travelpayouts.days_from", 21))
-        self.days_to = int(cfg.get("sources.travelpayouts.days_to", 180))
         self.limit = int(cfg.get("sources.travelpayouts.limit", 100))
         self.max_transfers = int(cfg.get("sources.travelpayouts.max_transfers", 1))
         self.delay_s = float(cfg.get("sources.travelpayouts.delay_s", 1.0))
@@ -54,19 +55,23 @@ class TravelpayoutsSource:
     # ---------- dotaz ----------
 
     def _params(self, origin: str) -> dict:
-        today = dt.date.today()
+        """Dotaz na nejlevnější cíle z jednoho letiště.
+
+        `departure_at` je **měsíc** (`2026-08`), ne konkrétní datum. Původně tu
+        byl rozsah `departure_at` + `return_at` vzdálený půl roku, na což API
+        odpovědělo `400` — nejsou to meze okna, ale skutečné termíny letu.
+
+        Bez `destination` vrátí nejlevnější cíle, což je celý smysl zdroje.
+        """
+        mesic = (dt.date.today() + dt.timedelta(days=self.days_from)).strftime("%Y-%m")
         return {
             "origin": origin,
-            # Bez `destination` vrátí nejlevnější cíle — celý smysl zdroje.
-            "departure_at": (today + dt.timedelta(days=self.days_from)).isoformat(),
-            "return_at": (today + dt.timedelta(days=self.days_to)).isoformat(),
+            "departure_at": mesic,
             "currency": "czk",
             "sorting": "price",
-            "one_way": "false",
+            "one_way": "true",
             "limit": self.limit,
             "page": 1,
-            # Bez tohohle vrací i nabídky, na které se nedá prokliknout.
-            "market": "cz",
         }
 
     def fetch(self) -> list[Offer]:
@@ -138,8 +143,8 @@ class TravelpayoutsSource:
             # Uid je TRASA, ne termín — jinak by se cenová historie nenasbírala.
             # Tentýž důvod jako u Ryanairu a Wizz Airu.
             uid=f"{odkud}-{dest}",
-            name=f"Letenky z {_MESTA.get(odkud, odkud)} do {dest}"
-                 + (f" ({prestupy} přestup)" if prestupy else " (přímý let)"),
+            name=f"Letenky z {_MESTA.get(odkud, odkud)} do {dest} (jednosměrné"
+                 + (f", {prestupy} přestup)" if prestupy else ", přímý let)"),
             price_czk=self.fx.to_czk(cena, "CZK"),
             price_orig=cena,
             currency="CZK",

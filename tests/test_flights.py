@@ -510,3 +510,38 @@ class TestTravelpayouts:
         source = self._source()
         source.token = ""
         assert source.fetch() == []
+
+
+class TestTravelpayoutsDotaz:
+    """Parametry vznikly z dokumentace a API na ne odpovedelo 400."""
+
+    def _params(self):
+        from src.sources.travelpayouts import TravelpayoutsSource
+
+        source = TravelpayoutsSource(None, None, load_config())
+        return source._params("PRG")
+
+    def test_departure_is_a_month_not_a_date(self):
+        """Rozsah `departure_at` + `return_at` pul roku od sebe vracel 400:
+        nejsou to meze okna, ale skutecne terminy letu."""
+        import re
+
+        params = self._params()
+        assert re.fullmatch(r"\d{4}-\d{2}", params["departure_at"])
+        assert "return_at" not in params
+
+    def test_no_destination_means_anywhere(self):
+        assert "destination" not in self._params()
+
+
+class TestChybovaHlaskaNeprozradiKlic:
+    def test_query_string_is_stripped_from_errors(self):
+        """`requests` pise do hlasky celou URL i s query stringem."""
+        from src.net import _bez_query
+
+        text = _bez_query(RuntimeError(
+            "400 Client Error for url: https://api.example.com/v3/x?origin=PRG&token=tajne"))
+
+        assert "tajne" not in text
+        assert "origin" not in text
+        assert "https://api.example.com/v3/x?…" in text

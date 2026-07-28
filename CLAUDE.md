@@ -152,6 +152,14 @@ minimum a šlo k AI soudci. `prev_min` drží minimum před zápisem a porovnán
 **ostře** menší; stejná cena jako dosud není nález. Sloupec doplňuje `_migrate`,
 protože `CREATE TABLE IF NOT EXISTS` existující databázi nesáhne.
 
+**Cestovatelské prahy se nevybírají podle sekce, ale podle `Offer.category`.**
+A ta u Pepperu nese jazyk toho webu — `Urlaub & Reisen`, `Travel`, `Voyage`.
+V souhrnu položka do sekce Cestování spadla správně (`notify.group_of`), jenže
+`score._thresholds_for` na ni sáhl prahem pro digitální klíče, takže týdenní
+pobyt na Korfu za 313° nemohl projít nikdy. `thresholds.by_category` proto nese
+i tyhle klíče přes YAML kotvu a test `test_travel_vocabulary_does_not_drift`
+hlídá, že se oba seznamy nerozejdou.
+
 **`FlightOracle` oceňuje jen `category == "flight"`.** Zájezd má v ceně
 i ubytování a stravu, takže cena letenky o něm nevypovídá. Ten ať ocení AI
 soudce, nebo zůstane neoceněný.
@@ -215,6 +223,14 @@ systémy. Zbývá Amadeus (free tier, klíč) a Travelpayouts (token zdarma).
 
 **České e-shopy:** Alza 403, CZC captcha (DataDome), Mall 404, Heureka 403,
 Slevomat 403, Hlídač shopů 403, Skrz nemá feed, Sleviště vrací HTML.
+
+**Samostatné feedy na ubytování** u našich zdrojů nejsou. `cestujlevne.com`
+i `fly4free.com` vracejí na `…/ubytovani/feed`, `…/zajezdy/feed`,
+`…/hotel-deals/feed/` čtyřistačtyřku. `travelfree.info/tag/hotel/feed/`
+odpovídá, ale je to **archiv**: nejnovější z 25 položek je 497 dní stará,
+medián přes šest let, jedna se sama označuje `**EXPIRED**`. Filtr `max_age_days`
+by ji stejně zahodil. Hotely a pobyty chodí hlavním feedem, kde je všechno
+čerstvé — změřeno 24 z 70 položek napříč zdroji, z toho 0 špatně zařazených.
 
 **Cestovatelské weby:** `secretflying.com/feed/` vrací HTML, `fly4free.pl`
 error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.

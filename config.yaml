@@ -136,8 +136,20 @@ thresholds:
   # trháky hned první den. U her je odhad zvenčí v pořádku (mají doporučenou
   # cenu), u letenky ne.
   by_category:
-    flight: {instant_ratio: 0.45, digest_ratio: 0.70, catalog_history_only: true}
-    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70, catalog_history_only: true}
+    flight: &cestovani {instant_ratio: 0.45, digest_ratio: 0.70, catalog_history_only: true}
+    hotel: *cestovani
+    # Pepper píše kategorie v jazyce svého webu, takže tatáž věc se jmenuje
+    # pokaždé jinak. Bez těchhle klíčů dostal týdenní pobyt na Korfu za 313°
+    # práh nastavený na digitální klíče (5 %) a neprošel nikdy — přestože
+    # v souhrnu už do sekce Cestování patřil. Seznam musí odpovídat
+    # `notify._TRAVEL_WORDS`; hlídá to test.
+    urlaub: *cestovani
+    reisen: *cestovani
+    travel: *cestovani
+    voyage: *cestovani
+    podróże: *cestovani
+    podroze: *cestovani
+    vakanties: *cestovani
   # Fyzické zboží z ciziny bez potvrzeného doručení do ČR nikdy nejde jako INSTANT.
   require_ships_to_cz_for_instant: true
 

@@ -167,6 +167,35 @@ class TestTravelScoring:
         offer = _kinguin("Nějaká hra", 10_000.0, ref_czk=25_000.0)
         assert scorer.prescore([offer])[0].level == NONE
 
+    def test_pepper_travel_gets_travel_thresholds(self, scorer):
+        """Pepper píše kategorie německy, polsky a francouzsky.
+
+        Dokud v `by_category` chyběly, soudil týdenní pobyt na Korfu práh
+        nastavený na digitální klíče — v souhrnu byl v sekci Cestování,
+        ale projít nemohl nikdy.
+        """
+        offer = Offer(
+            source="mydealz", kind=FEED, uid="p1",
+            name="313° - Korfu: 1 Woche im 4* Hotel", price_czk=10_000.0,
+            ref_price_czk=25_000.0, url="https://www.mydealz.de/x",
+            category="Urlaub & Reisen", merchant="Amazon", credibility=0.9,
+            extra={"temperature": 313},
+        )
+        assert scorer.prescore([offer])[0].level == INSTANT
+
+    def test_travel_vocabulary_does_not_drift(self, scorer):
+        """Souhrn a prahy si o cestování musí myslet totéž.
+
+        `notify.group_of` a `score._thresholds_for` mají každý svůj seznam slov.
+        Když se rozejdou, položka skončí v sekci Cestování s prahem na klíče —
+        přesně ta chyba, kvůli které tenhle test vznikl.
+        """
+        from src.notify import _TRAVEL_WORDS
+
+        klice = {k.lower() for k in scorer.by_category}
+        chybi = [w for w in _TRAVEL_WORDS if w not in klice]
+        assert not chybi, f"v thresholds.by_category chybí: {chybi}"
+
 
 class TestHistorickeMinimum:
     """Proč bot první den hlásil obyčejné letenky jako trháky.

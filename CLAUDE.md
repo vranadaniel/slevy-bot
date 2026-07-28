@@ -298,8 +298,30 @@ ano — vypadá to na omezení sítě, ne na mrtvý endpoint.
 error-fare feed je prázdný, veřejné náhledy `t.me/s/…` u těchhle webů neexistují.
 `theflightdeal.com` a `airfarespot.com` fungují, ale mají US trasy.
 
-**Herní obchody:** Eneba 400 + IP allowlist, G2A 403, Gamivo 404, Humble 403,
-Reddit vyžaduje OAuth.
+**Herní obchody:** Eneba 400 + IP allowlist (GraphQL vrací 400), G2A 403,
+Gamivo `401` na `/api/public/v1/products` (endpoint existuje, chce partnerský
+klíč), Humble 403, Reddit vyžaduje OAuth.
+
+**Kinguin je mezi marketplace s klíči výjimka, ne pravidlo.** Proměřeno
+šestnáct obchodů 28. 7. 2026 a otevřené JSON bez klíče má kromě něj jen HRK
+a GOG; zbytek blokuje boty nebo chce schválení partnera: CDKeys 403,
+Instant Gaming vrací HTML, Driffle 404, K4G 500, Green Man Gaming 500,
+Voidu 410, Nuuvem 404, AllKeyShop 404, Difmark a RoyalCDKeys shodily
+certifikát, DLCompare a Gamesplanet nemají JSON. **Pro levné licence na
+software a předplatné tedy jiný zdroj tohohle typu nemáme** — a je to
+měřením podložené, ne odhad.
+
+**GOG má nejlepší data ze všech, ale jen hry.** `catalog.gog.com/v1/catalog`
+je bez klíče, vrací 12 497 produktů, ceny **rovnou v korunách** a hlavně
+`price.base` vedle `price.final` — a to je **skutečná ceníková cena obchodu**,
+ne MSRP vymyšlená prodejcem jako na Kinguinu. Nese i `storeLink`,
+`reviewsRating` a `reviewsCount`, takže popularita je v odpovědi rovnou
+a nemusí se doptávat ITAD. Kdyby se hry někdy dělaly pořádně, tohle je ten
+zdroj; `DeclaredOracle` by u něj platil bez výhrad.
+
+**HRK Game** (`hrkgame.com/api/products/`) vrací 100 položek bez klíče, ale
+jen `title`, `price`, `platform`, `region` a obrázek — **žádný odkaz ani id**.
+Bez URL se nedá poslat použitelná zpráva a `limit` API ignoruje.
 
 **Steam jako zdroj nabídek nedává smysl** — `store.steampowered.com/api/
 featuredcategories/` sice vrací čistý JSON se slevou proti MSRP, ale je v něm

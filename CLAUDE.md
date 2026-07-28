@@ -241,8 +241,9 @@ Protaženo skutečným parserem: přes filtr odletových letišť prošlo u vše
 i odlety, na které se odsud nedostaneš.
 
 Jediná pobočka té sítě, která by dávala smysl, je rakouská `ferienpiraten.at`
-(odlety z Vídně). **Ověřit se nedala**: doména se přeloží (45.87.158.7), ale
-spojení vyprší. Stojí za jeden pokus přímo ze serveru.
+(odlety z Vídně). **Nefunguje.** Doména se přeloží (45.87.158.7), ale port 443
+spojení odmítne — ověřeno i z ostrého serveru, kde `curl` selhal za 181 ms.
+Není to blokace naší sítě, ten web na HTTPS prostě neodpovídá.
 
 **Kategoriové feedy Pepperu nemají teplotu.** `mydealz.de/rss/gruppe/kleidung`,
 `…/sneaker`, `…/schuhe` i `…/fashion-accessoires` existují a vracejí po 30
@@ -314,8 +315,11 @@ registrace ověřit nedá a účty nezakládáme.
 **AppSumo feed nemá** — `/feed/` je 404, `/rss/` vrací HTML. Zbýval by scraping.
 
 **Fyzické zboží:** `de.camelcamelcamel.com/top_drops/feed` funguje (20 položek
-RSS, propady cen na německém Amazonu). Geizhals a honzovyletenky.cz shodily
-spojení na chybě certifikátu.
+RSS, propady cen na německém Amazonu). **Geizhals nefunguje** — z ostrého
+serveru vrací `403` na `.de`, `.at` i `.eu`, tedy ochrana proti botům, ne
+problém certifikátu, jak to vypadalo odjinud. Řadí se k Alze, Heurece
+a Slevomatu. `honzovyletenky.cz` má chybný certifikát; obejít by to šlo jen
+vypnutím ověřování, což je za deset položek špatná cena.
 
 ## Externí rozhraní
 

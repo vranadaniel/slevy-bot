@@ -248,6 +248,13 @@ parametrů včetně duplicitní `tp*` kopie — viz `_odkaz`. Se samotným
 „Nemáte aktivní vyhledávání". Ověřeno v prohlížeči. Wizz Air tímhle netrpí,
 jeho `/booking/select-flight/PRG/OTP/2026-09-11` funguje.
 
+API vrací **nejlevnější dvojici v celém okně**, a ta bývá nepoužitelná: přílet
+ve 22:55 a odlet druhý den v 11:30 je devět hodin na místě, z toho osm
+prospaných. Cena je pravdivá, nabídka ne — proto `notify.format_term` vypisuje
+termín včetně počtu nocí. Filtrovat to na straně API **nejde**: `durationFrom`
+a `durationTo` sice projdou, ale i logicky prázdný rozsah 1–30 nocí srazí
+odpověď z 18 tras na 6. Nefiltruje, přepíná do jiného a mnohem chudšího režimu.
+
 **Wizz Air** (`sources/wizzair.py`) — druhý katalogový zdroj, doplňuje Ryanair:
 z Vídně nelétá, zato z Bratislavy má 38 tras (Praha 20). Tři věci, bez kterých
 to nefunguje a na které se přijde jen měřením:

@@ -20,7 +20,8 @@ import sys
 from .config import load_config
 from .fx import load_fx
 from .net import build_http
-from .notify import Telegram, format_digest, format_instant, group_of
+from .notify import (Telegram, format_digest, format_instant, format_term,
+                     group_of)
 from .oracles.declared import DeclaredOracle
 from .oracles.flights import FlightOracle
 from .oracles.history import HistoryOracle
@@ -275,6 +276,9 @@ def _queue(store, verdict) -> None:
         "reviews_score": offer.extra.get("reviews_score"),
         "reviews_count": offer.extra.get("reviews_count"),
         "released": offer.extra.get("released"),
+        # Termín se skládá teď, ne až večer — fronta si nese hotový text
+        # a nemusí si pamatovat, ze kterých polí vznikl.
+        "term": format_term(offer.extra),
     })
     # Zapsat i u souhrnu, jinak by deduplikace neměla o čem rozhodovat příště.
     store.mark_alerted(offer.source, offer.uid, offer.price_czk, DIGEST)

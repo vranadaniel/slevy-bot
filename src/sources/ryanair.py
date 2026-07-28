@@ -124,7 +124,11 @@ class RyanairSource:
             extra={
                 "airport": origin,
                 "destination": dest,
+                # Termín se ve zprávě vypisuje: nejlevnější kombinace bývá
+                # přílet pozdě večer a odlet druhý den dopoledne, což je cena
+                # pravdivá, ale nabídka nepoužitelná. Musí to jít poznat.
                 "outbound": outbound.get("departureDate"),
+                "outbound_arrival": outbound.get("arrivalDate"),
                 "inbound": inbound.get("departureDate"),
             },
         )

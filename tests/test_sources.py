@@ -407,6 +407,46 @@ class TestRyanairOdkaz:
         assert offer.url == "https://www.ryanair.com/cz/cs"
 
 
+class TestTermVeZprave:
+    """Nejlevnější kombinace nemusí dávat smysl a musí to jít poznat ze zprávy."""
+
+    def test_overnight_turnaround_is_visible(self):
+        from src.notify import format_term
+
+        term = format_term({"outbound": "2026-10-13T21:45:00",
+                            "outbound_arrival": "2026-10-13T22:55:00",
+                            "inbound": "2026-10-14T11:30:00"})
+
+        assert term == "út 13. 10. 21:45 → 22:55 · zpět st 14. 10. 11:30 · 1 noc"
+
+    def test_week_long_trip(self):
+        from src.notify import format_term
+
+        term = format_term({"outbound": "2026-09-05T06:20:00",
+                            "outbound_arrival": "2026-09-05T08:05:00",
+                            "inbound": "2026-09-12T19:40:00"})
+        assert term.endswith("7 nocí")
+
+    def test_date_without_time_does_not_invent_midnight(self):
+        """Wizz Air vrací holé datum; „00:00" by byl vymyšlený údaj o odletu."""
+        from src.notify import format_term
+
+        assert format_term({"outbound": "2026-09-11"}) == "pá 11. 9. · jednosměrná"
+
+    def test_item_without_a_term_is_silent(self):
+        from src.notify import format_term
+
+        assert format_term({"airport": "PRG"}) is None
+
+    def test_ryanair_offer_carries_arrival_time(self):
+        fare = TestRyanairOdkaz()._fare()
+        fare["outbound"]["arrivalDate"] = "2026-10-13T22:55:00"
+        offer = TestRyanairOdkaz()._offer(fare)
+
+        assert offer.extra["outbound_arrival"] == "2026-10-13T22:55:00"
+        assert offer.extra["inbound"] == "2026-10-14T11:30:00"
+
+
 class _Fake:
     """Minimum, které `_to_offer` potřebuje — kurz a název zdroje."""
     name = "ryanair"

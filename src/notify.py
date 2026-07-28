@@ -5,6 +5,7 @@ Dvě úrovně: extrém pingne hned zvlášť, zbytek přijde jednou denně jako 
 
 from __future__ import annotations
 
+import datetime as dt
 import html
 import logging
 
@@ -60,6 +61,72 @@ class Telegram:
         ).json()
 
 
+_DNY = ("po", "út", "st", "čt", "pá", "so", "ne")
+
+
+def _cas(iso: str | None) -> dt.datetime | None:
+    try:
+        return dt.datetime.fromisoformat(iso) if iso else None
+    except ValueError:
+        return None
+
+
+def _hodina(iso: str | None, moment: dt.datetime | None) -> str:
+    """Čas jen tam, kde ho zdroj opravdu dodal.
+
+    Wizz Air vrací u trasy holé datum, takže `fromisoformat` doplní půlnoc.
+    Vypsat „00:00" by byl vymyšlený údaj o odletu.
+    """
+    if moment is None or not iso or len(str(iso)) <= 10:
+        return ""
+    return f" {moment:%H:%M}"
+
+
+def format_term(extra: dict) -> str | None:
+    """Termín letu v jedné řádce: „út 13. 10. 21:45 → 22:55 · zpět st 14. 10. 11:30 · 1 noc".
+
+    Bez tohohle je nejlevnější kombinace k nerozeznání od použitelné. Ryanair
+    vrací nejlevnější dvojici v celém okně, a ta bývá přílet ve 22:55 a odlet
+    druhý den v 11:30 — devět hodin na místě, z toho osm prospaných. Cena je
+    pravdivá, jen ta nabídka nedává smysl a musí to jít poznat ze zprávy.
+
+    Filtrovat to na straně Ryanairu nejde: `durationFrom`/`durationTo` API sice
+    přijme, ale i logicky prázdný rozsah 1–30 nocí srazí odpověď z 18 tras na 6.
+    Nefiltruje, přepíná do jiného režimu. Změřeno 28. 7. 2026.
+    """
+    tam = _cas(extra.get("outbound"))
+    if tam is None:
+        return None
+
+    def den(moment: dt.datetime) -> str:
+        return f"{_DNY[moment.weekday()]} {moment.day}. {moment.month}."
+
+    casti = [den(tam) + _hodina(extra.get("outbound"), tam)]
+    prilet = _cas(extra.get("outbound_arrival"))
+    hodina_priletu = _hodina(extra.get("outbound_arrival"), prilet)
+    if hodina_priletu:
+        casti[0] += f" →{hodina_priletu}"
+
+    zpet = _cas(extra.get("inbound"))
+    if zpet is None:
+        casti.append("jednosměrná")
+        return " · ".join(casti)
+
+    casti.append(f"zpět {den(zpet)}{_hodina(extra.get('inbound'), zpet)}")
+    noci = (zpet.date() - tam.date()).days
+    if noci >= 0:
+        casti.append(_noci(noci))
+    return " · ".join(casti)
+
+
+def _noci(count: int) -> str:
+    if count == 0:
+        return "bez přespání"
+    if count == 1:
+        return "1 noc"
+    return f"{count} noci" if count < 5 else f"{count} nocí"
+
+
 def _fmt_czk(value: float) -> str:
     """1234.5 -> '1 234 Kč' (s pevnou mezerou, ať se to nezalomí)."""
     return f"{value:,.0f}".replace(",", " ") + " Kč"
@@ -93,6 +160,12 @@ def format_instant(verdict) -> str:
         detail.append(html.escape(offer.merchant))
     if detail:
         lines.append(" · ".join(detail))
+
+    # Termín má vlastní řádek — je to to první, podle čeho se pozná, jestli
+    # ta letenka vůbec dává smysl.
+    term = format_term(offer.extra)
+    if term:
+        lines.append(f"📅 {html.escape(term)}")
 
     if verdict.reasons:
         lines.append("")
@@ -187,6 +260,9 @@ def _detail(item: dict) -> list[str]:
     released = (item.get("released") or "")[:4]
     if released.isdigit():
         parts.append(released)
+    term = item.get("term")
+    if term:
+        parts.append(html.escape(term))
     return parts
 
 

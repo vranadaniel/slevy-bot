@@ -521,14 +521,19 @@ class TestTravelpayoutsDotaz:
         source = TravelpayoutsSource(None, None, load_config())
         return source._params("PRG")
 
-    def test_departure_is_a_month_not_a_date(self):
-        """Rozsah `departure_at` + `return_at` pul roku od sebe vracel 400:
-        nejsou to meze okna, ale skutecne terminy letu."""
-        import re
+    def test_no_date_filter_at_all(self):
+        """`departure_at` neni mez okna, ale skutecny termin letu.
 
+        Rozsah pul roku od sebe vracel 400 a i spravne zadany mesic odpoved
+        zuzil ze 100 tras na 31. Zmereno s ostrym tokenem 28. 7. 2026.
+        """
         params = self._params()
-        assert re.fullmatch(r"\d{4}-\d{2}", params["departure_at"])
+        assert "departure_at" not in params
         assert "return_at" not in params
+
+    def test_limit_is_sent(self):
+        """Bez `limit` vrati API 30 tras, s nim 100."""
+        assert self._params()["limit"] > 30
 
     def test_no_destination_means_anywhere(self):
         assert "destination" not in self._params()

@@ -57,16 +57,20 @@ class TravelpayoutsSource:
     def _params(self, origin: str) -> dict:
         """Dotaz na nejlevnější cíle z jednoho letiště.
 
-        `departure_at` je **měsíc** (`2026-08`), ne konkrétní datum. Původně tu
-        byl rozsah `departure_at` + `return_at` vzdálený půl roku, na což API
-        odpovědělo `400` — nejsou to meze okna, ale skutečné termíny letu.
+        Dvě věci, na které se přišlo až během s ostrým tokenem:
+
+        * **`departure_at` se schválně neposílá.** Není to mez okna, ale
+          skutečný termín letu — původní rozsah `departure_at` + `return_at`
+          půl roku od sebe vracel `400`. A i správně zadaný měsíc odpověď
+          **zúží z 100 tras na 31**. Bez něj se ptáme na „nejlevnější, co je
+          teď na téhle trase v prodeji", což je pro cenovou historii lepší
+          definice: nemá skok na přelomu měsíce.
+        * **`limit` je potřeba.** Bez něj vrátí API 30 tras, s ním 100.
 
         Bez `destination` vrátí nejlevnější cíle, což je celý smysl zdroje.
         """
-        mesic = (dt.date.today() + dt.timedelta(days=self.days_from)).strftime("%Y-%m")
         return {
             "origin": origin,
-            "departure_at": mesic,
             "currency": "czk",
             "sorting": "price",
             "one_way": "true",

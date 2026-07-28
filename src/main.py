@@ -450,7 +450,10 @@ def run_check_travelpayouts(cfg) -> int:
         if resp.ok:
             radky = (resp.json() or {}).get("data") or []
             print(f"  {popis:24} {resp.status_code}  nabídek: {len(radky)}")
-            if radky and data is None:
+            # Bere se varianta s NEJVÍC nabídkami, ne první, která projde.
+            # Zrovna u tohohle API na tom hodně záleží: `limit` zvedne
+            # odpověď z 30 na 100, kdežto `departure_at` ji srazí na 31.
+            if radky and (data is None or len(radky) > len(data.get("data") or [])):
                 data, funkcni = resp.json(), (popis, params)
         else:
             print(f"  {popis:24} {resp.status_code}  {telo}")

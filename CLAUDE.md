@@ -253,11 +253,23 @@ vrací nejlevnější cíle — otázku „kam se teď dá letět levně" jiný 
 položit neumí (u Wizz Airu ověřeno, že obdobu nemá).
 
 Token jde v hlavičce `X-Access-Token`, **nikdy v URL** — v query stringu by
-skončil v logu proxy i v historii serveru. Tvar odpovědi vznikl z dokumentace,
-ne z měření, což je v tomhle projektu výjimka; proto je parser tolerantní
-a proto existuje `--check-travelpayouts`, který vypíše syrová jména polí vedle
-toho, co z nich zdroj složil. **Než se ten příkaz jednou pustí s ostrým tokenem,
-nepovažuj mapování za ověřené.**
+skončil v logu proxy i v historii serveru. Ověřeno s ostrým tokenem 28. 7. 2026
+přes `--check-travelpayouts`, který projde žebřík variant dotazu a vypíše
+syrová jména polí vedle toho, co z nich zdroj složil.
+
+Dvě věci, na které se přišlo až tím měřením a bez kterých zdroj ztrácí většinu
+užitku:
+
+* **`departure_at` se schválně neposílá.** Není to mez okna, ale skutečný
+  termín letu — rozsah `departure_at` + `return_at` půl roku od sebe vracel
+  `400`. A i správně zadaný měsíc odpověď **zúží ze 100 tras na 31**. Bez něj
+  se ptáme na „nejlevnější, co je teď na téhle trase v prodeji", což je pro
+  cenovou historii lepší definice: nemá skok na přelomu měsíce.
+* **`limit` je potřeba.** Bez něj vrátí API 30 tras, s ním 100.
+
+Odpověď nese `origin`, `destination`, `price`, `transfers`, `departure_at`,
+`link`, `airline` a doby letu. `link` je relativní (`/search/PRG2208SKP1?t=…`),
+takže se předsazuje `https://www.aviasales.com`.
 
 **Letenková API:** `tequila.kiwi.com` je dnes **jen na pozvání** — portál nemá
 samoobslužnou registraci, jen přihlášení a odkaz na `affiliates@kiwi.com`.

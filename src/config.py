@@ -36,6 +36,7 @@ class Config:
         self.telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
         self.openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         self.itad_key = os.environ.get("ITAD_API_KEY", "").strip()
+        self.travelpayouts_token = os.environ.get("TRAVELPAYOUTS_TOKEN", "").strip()
 
     def get(self, path: str, default: Any = None) -> Any:
         """Přístup přes tečkovou cestu, např. cfg.get("thresholds.instant_ratio")."""
@@ -62,6 +63,11 @@ class Config:
     @property
     def itad_enabled(self) -> bool:
         return bool(self.get("itad.enabled", False)) and bool(self.itad_key)
+
+    @property
+    def travelpayouts_enabled(self) -> bool:
+        return (bool(self.get("sources.travelpayouts.enabled", False))
+                and bool(self.travelpayouts_token))
 
 
 def load_config() -> Config:

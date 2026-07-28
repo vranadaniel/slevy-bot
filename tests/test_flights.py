@@ -424,3 +424,89 @@ class TestWizzAirOkno:
         data = {"outboundFlights": [
             {"priceType": "noData", "price": {"amount": 0.0, "currencyCode": "EUR"}}]}
         assert source._to_offer("BTS", "BER", data) is None
+
+
+class TestTravelpayouts:
+    """Odpověď se bez tokenu ověřit nedala, proto tvrdší testy než jinde.
+
+    Mapování polí vzniklo z dokumentace, ne z měření. Parser tedy musí přežít
+    to, že se pole jmenuje jinak — jedna výjimka by uzemnila celý zdroj.
+    """
+
+    def _source(self, **prepis):
+        from src.sources.travelpayouts import TravelpayoutsSource
+
+        cfg = load_config()
+        cfg.raw["sources"]["travelpayouts"].update(prepis)
+        source = TravelpayoutsSource(None, None, cfg)
+        source.fx = type("Fx", (), {"to_czk": staticmethod(lambda a, m: a)})()
+        return source
+
+    def _row(self, **zmeny):
+        row = {
+            "origin": "PRG", "destination": "BKK", "price": 11900,
+            "transfers": 1, "airline": "QR",
+            "departure_at": "2026-10-13T21:45:00+02:00",
+            "return_at": "2026-10-24T09:15:00+07:00",
+            "link": "/searches/PRG1310BKK2410",
+        }
+        row.update(zmeny)
+        return row
+
+    def test_route_is_the_uid_not_the_date(self):
+        """Stejný důvod jako u Ryanairu — jinak se historie nikdy nenasbírá."""
+        from src.sources.base import CATALOG
+
+        offer = self._source()._to_offer("PRG", self._row())
+
+        assert offer.uid == "PRG-BKK"
+        assert offer.kind == CATALOG
+        assert offer.category == "flight"
+        assert offer.price_czk == 11900
+
+    def test_relative_link_becomes_a_real_url(self):
+        offer = self._source()._to_offer("PRG", self._row())
+        assert offer.url == "https://www.aviasales.com/searches/PRG1310BKK2410"
+
+    def test_too_many_transfers_are_dropped(self):
+        """Dva přestupy bývají levné na papíře a nepoužitelné v praxi."""
+        source = self._source(max_transfers=1)
+        assert source._to_offer("PRG", self._row(transfers=3)) is None
+        assert source._to_offer("PRG", self._row(transfers=1)) is not None
+
+    def test_token_never_travels_in_the_url(self):
+        """V query stringu by klíč skončil v logu proxy i v historii serveru."""
+        params = self._source()._params("PRG")
+        assert not any("token" in k.lower() for k in params)
+
+    def test_query_asks_for_every_destination(self):
+        """Bez cílové stanice vrátí nejlevnější cíle — celý smysl zdroje."""
+        params = self._source()._params("PRG")
+        assert "destination" not in params
+        assert params["origin"] == "PRG"
+        assert params["sorting"] == "price"
+
+    def test_row_without_the_essentials_is_skipped(self):
+        source = self._source()
+        for rozbita in ({}, {"price": "nesmysl"}, {"destination": "BKK", "price": []},
+                        {"destination": "", "price": 100},
+                        {"destination": "BKK", "price": 0}):
+            assert source._to_offer("PRG", rozbita) is None
+
+    def test_renamed_fields_do_not_raise(self):
+        """Nejhorší scénář: API se změní. Zdroj smí zmlknout, ne spadnout.
+
+        Nesmyslný počet přestupů se bere jako nula — přijít o údaj o přestupu
+        je pořád lepší než přijít o celou nabídku.
+        """
+        source = self._source()
+        offer = source._to_offer("PRG", {"destination": "BKK", "price": 100,
+                                         "transfers": "ne", "link": None})
+
+        assert offer.extra["transfers"] == 0
+        assert offer.url == "https://www.aviasales.com"
+
+    def test_without_token_the_source_is_silent(self):
+        source = self._source()
+        source.token = ""
+        assert source.fetch() == []

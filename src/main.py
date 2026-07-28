@@ -36,6 +36,7 @@ from .sources.pepper import build_pepper_sources
 from .sources.ryanair import RyanairSource
 from .sources.wizzair import WizzAirSource
 from .sources.travel import build_travel_sources
+from .sources.travelpayouts import TravelpayoutsSource
 from .store import Store
 
 log = logging.getLogger("slevy")
@@ -57,7 +58,11 @@ def build_sources(http, fx, cfg, only: str | None = None, store=None) -> list:
                           + ([RyanairSource(http, fx, cfg)]
                              if cfg.get("sources.ryanair.enabled", True) else [])
                           + ([WizzAirSource(http, fx, cfg, store)]
-                             if cfg.get("sources.wizzair.enabled", True) else []),
+                             if cfg.get("sources.wizzair.enabled", True) else [])
+                          # Bez tokenu se zdroj ani nezakládá — jinak by každý
+                          # běh hlásil, že ho přeskakuje.
+                          + ([TravelpayoutsSource(http, fx, cfg, store)]
+                             if cfg.travelpayouts_enabled else []),
     }
     if only and only not in families:
         raise SystemExit(f"Neznámá rodina zdrojů '{only}'. "
@@ -376,6 +381,60 @@ def report(verdicts, instant, digest) -> None:
         print()
 
 
+def run_check_travelpayouts(cfg) -> int:
+    """Ověří token a ukáže, jak odpověď doopravdy vypadá.
+
+    Existuje proto, že odpověď se bez tokenu ověřit nedala — mapování polí
+    v `sources/travelpayouts.py` vzniklo z dokumentace, ne z měření. Tenhle
+    příkaz je ten měřicí krok: vypíše syrová jména polí u první nabídky
+    a vedle to, co z nich zdroj složil. Když se něco přejmenovalo, uvidíš to.
+    """
+    if not cfg.travelpayouts_token:
+        print("Chybí TRAVELPAYOUTS_TOKEN v prostředí.")
+        return 1
+
+    from .sources.travelpayouts import API, TravelpayoutsSource
+
+    http = build_http(cfg)
+    store = Store(cfg.db_path)
+    source = TravelpayoutsSource(http, load_fx(http, store), cfg, store)
+    origin = (source.airports or ["PRG"])[0]
+    # Token se nikdy nevypisuje, jen jeho délka — stejně jako u --check-itad.
+    print(f"Token načten ({len(cfg.travelpayouts_token)} znaků), "
+          f"ptám se na lety z {origin}.\n")
+
+    try:
+        data = http.get_json(API, params=source._params(origin),
+                             headers={"X-Access-Token": cfg.travelpayouts_token,
+                                      "Accept": "application/json"})
+    except Exception as exc:  # noqa: BLE001
+        print(f"Dotaz selhal: {exc}")
+        store.close()
+        return 1
+
+    rows = (data or {}).get("data") or []
+    print(f"Odpověď má klíče: {sorted(data)[:8]}")
+    print(f"Nabídek: {len(rows)}\n")
+    if not rows:
+        print("Prázdná odpověď — zkontroluj okno termínů v config.yaml.")
+        store.close()
+        return 1
+
+    print(f"Pole první nabídky:\n  {sorted(rows[0])}\n")
+
+    offers = [o for o in (source._to_offer(origin, r) for r in rows[:8]) if o]
+    print(f"Z prvních osmi se podařilo složit {len(offers)} nabídek:")
+    for offer in offers:
+        term = format_term(offer.extra) or "termín nerozpoznán"
+        print(f"  {offer.price_czk:>8.0f} Kč  {offer.uid:<9} {term}")
+        print(f"           {offer.url[:78]}")
+    if not offers:
+        print("  ŽÁDNOU — pole se přejmenovala, oprav mapování")
+        print(f"  syrová první nabídka: {rows[0]}")
+    store.close()
+    return 0 if offers else 1
+
+
 def run_check_itad(cfg) -> int:
     """Ověří klíč k ITAD na jedné známé hře a ukáže, v jaké měně chodí ceny."""
     if not cfg.itad_key:
@@ -483,6 +542,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--print-chat-id", action="store_true")
     parser.add_argument("--check-itad", action="store_true",
                         help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
+    parser.add_argument("--check-travelpayouts", action="store_true",
+                        help="ověří token k Travelpayouts a tvar odpovědi")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -498,6 +559,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_print_chat_id(cfg)
     if args.check_itad:
         return run_check_itad(cfg)
+    if args.check_travelpayouts:
+        return run_check_travelpayouts(cfg)
     if args.test_telegram:
         return run_test_telegram(cfg)
     if args.digest:

@@ -72,6 +72,25 @@ sources:
     routes_per_run: 12
     airports: [PRG, BRQ, OSR, PED, VIE, BTS]
 
+  # Travelpayouts (data Aviasales) — třetí katalogový zdroj. Na rozdíl od
+  # Ryanairu a Wizz Airu vidí napříč dopravci včetně přestupů, takže dosáhne
+  # i na dálkové trasy. Dotaz bez cílové stanice odpovídá na otázku "kam se
+  # teď dá letět levně", kterou žádný jiný náš zdroj neumí položit — u Wizz
+  # Airu ověřeno, že obdobu nemá.
+  #
+  # Vyžaduje TRAVELPAYOUTS_TOKEN v prostředí; bez něj se zdroj tiše přeskočí.
+  # Token se posílá v hlavičce X-Access-Token, ne v URL.
+  travelpayouts:
+    enabled: true
+    delay_s: 1.0
+    days_from: 21
+    days_to: 180
+    # Jeden přestup ano, dva už ne — třetí bývá levný na papíře
+    # a nepoužitelný v praxi.
+    max_transfers: 1
+    limit: 100
+    airports: [PRG, BRQ, OSR, VIE, BTS]
+
   # Cestování: letenky, hotely a zájezdy. Jeden parser na všechny weby.
   travel:
     enabled: true

@@ -34,7 +34,8 @@ python -m src.main --bootstrap               # označí feedy za viděné, nic n
 hodnota a proč verdikt dopadl, jak dopadl.
 
 Tokeny se berou z prostředí: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
-`OPENROUTER_API_KEY`, `ITAD_API_KEY`. Chybějící volitelný klíč nesmí nic shodit.
+`OPENROUTER_API_KEY`, `ITAD_API_KEY`, `TRAVELPAYOUTS_TOKEN`. Chybějící
+volitelný klíč nesmí nic shodit.
 
 ## Architektura
 
@@ -244,6 +245,19 @@ což je za tuhle nabídku špatná cena. `letuska.cz/blog`, `letenky-levne.cz`
 a tagové feedy cestujlevne.com vracejí 404; `pelikan.cz`, `travelking.cz`
 a `dovolena-levne.cz` vracejí HTML. `secretflying.com` a `flynous.com` odpovídají
 403 i s prohlížečovou hlavičkou.
+
+**Travelpayouts** (`sources/travelpayouts.py`) — data Aviasales, třetí
+katalogový zdroj. Vidí napříč dopravci včetně přestupů, takže dosáhne i na
+dálkové trasy, kde `flights.yaml` odhaduje nejhůř. Dotaz **bez cílové stanice**
+vrací nejlevnější cíle — otázku „kam se teď dá letět levně" jiný náš zdroj
+položit neumí (u Wizz Airu ověřeno, že obdobu nemá).
+
+Token jde v hlavičce `X-Access-Token`, **nikdy v URL** — v query stringu by
+skončil v logu proxy i v historii serveru. Tvar odpovědi vznikl z dokumentace,
+ne z měření, což je v tomhle projektu výjimka; proto je parser tolerantní
+a proto existuje `--check-travelpayouts`, který vypíše syrová jména polí vedle
+toho, co z nich zdroj složil. **Než se ten příkaz jednou pustí s ostrým tokenem,
+nepovažuj mapování za ověřené.**
 
 **Letenková API:** `tequila.kiwi.com` je dnes **jen na pozvání** — portál nemá
 samoobslužnou registraci, jen přihlášení a odkaz na `affiliates@kiwi.com`.

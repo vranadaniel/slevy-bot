@@ -235,9 +235,24 @@ by ji stejně zahodil. Hotely a pobyty chodí hlavním feedem, kde je všechno
 
 **Velké zahraniční slevové weby nedávají nic**, přestože feedy mají a jsou
 plné čerstvých položek: `urlaubspiraten.de` (45 položek, všechny čerstvé),
-`holidaypirates.com` (44) a `travelpirates.com` (14). Protaženo skutečným
-parserem: přes filtr odletových letišť prošlo **0, 0 a 0**. Odlétá se z Německa
-a Británie. Přidat je by znamenalo pustit i odlety, na které se odsud nedostaneš.
+`holidaypirates.com` (44), `travelpirates.com` (14) a `wakacyjnipiraci.pl` (33).
+Protaženo skutečným parserem: přes filtr odletových letišť prošlo u všech
+**nula**. Odlétá se z Německa, Británie a Polska. Přidat je by znamenalo pustit
+i odlety, na které se odsud nedostaneš.
+
+Jediná pobočka té sítě, která by dávala smysl, je rakouská `ferienpiraten.at`
+(odlety z Vídně). **Ověřit se nedala**: doména se přeloží (45.87.158.7), ale
+spojení vyprší. Stojí za jeden pokus přímo ze serveru.
+
+**Kategoriové feedy Pepperu nemají teplotu.** `mydealz.de/rss/gruppe/kleidung`,
+`…/sneaker`, `…/schuhe` i `…/fashion-accessoires` existují a vracejí po 30
+položkách, jenže **v žádném titulku není `123°`** — na rozdíl od `/rss/hot`,
+kde ji má všech 30. Ta čísla nejsou navíc jen ozdoba: teplota je jediný signál
+kvality, který u Pepperu prodejce nezfalšuje, a odvozuje se z ní `credibility`.
+Kategoriový feed tedy není „studený", on prostě **nemá čím doložit kvalitu** —
+a bez toho je to jen proud všeho nového. Přidat ho by šlo jen za cenu zrušení
+prahu teploty, tedy hlavní obrany proti braku u feedů. Módní slevy, které za
+něco stojí, se stejně objeví v `hot` (změřeno: 28 z 30 tam projde, medián 131°).
 
 **Další české pokusy:** `akcniletenky.cz` vrací platné RSS, ale **prázdné**.
 `honzovyletenky.cz` má chybný certifikát — obejít se dá jen vypnutím ověřování,

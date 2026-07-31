@@ -280,6 +280,21 @@ Jediná pobočka té sítě, která by dávala smysl, je rakouská `ferienpirate
 spojení odmítne — ověřeno i z ostrého serveru, kde `curl` selhal za 181 ms.
 Není to blokace naší sítě, ten web na HTTPS prostě neodpovídá.
 
+**Zalando Lounge nejde a nešel by ani s přístupem.** Změřeno: titulní stránka
+je přihlašovací, `/api/campaigns` i `/api/mobile/campaigns` vracejí 403, běžné
+`zalando.cz/api/catalog` taky. V hlavních feedech Pepperu se Lounge zrovna
+neobjevil ani jednou; v kategoriových se objevuje, jenže ty nemají teplotu
+(viz níž).
+
+Horší než blokace je ale to, že **u módy nemáme z čeho udělat hodnotu**.
+`value_ratio` potřebuje referenci, kterou prodejce neurčuje — u her je to ITAD
+a vlastní historie, u letenek ceník a historie. U oblečení existuje jen
+doporučená cena, kterou si Lounge nastavuje sám, a žádná obdoba ITAD. Je to
+přesně tvar pasti „Tanks Battle": vysoká deklarovaná sleva bez možnosti ověření.
+Jediná schůdná cesta by byla vlastní cenová historie konkrétního artiklu, a ta
+vyžaduje přihlášenou relaci — tedy uložené přihlášení uživatele na serveru.
+To se dělat nebude.
+
 **Kategoriové feedy Pepperu nemají teplotu.** `mydealz.de/rss/gruppe/kleidung`,
 `…/sneaker`, `…/schuhe` i `…/fashion-accessoires` existují a vracejí po 30
 položkách, jenže **v žádném titulku není `123°`** — na rozdíl od `/rss/hot`,

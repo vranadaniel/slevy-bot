@@ -182,6 +182,16 @@ thresholds:
   # Pepperu a zároveň pouští redakčně vybírané letenky a hotely — ty žádný
   # levný oracle ocenit neumí, takže bez AI by cestování mlčelo vždycky.
   min_credibility_ai: 0.8
+  # Nižší laťka pro nabídky, u kterých VÍME, že se dají koupit do Česka.
+  # Změřeno na Pepperu: ze 107 nabídek jich 53 pochází z obchodů s potvrzeným
+  # doručením (Amazon, AliExpress, Steam), ale jen 8 má v textu původní cenu.
+  # Zbytek nikdo neocení a při jednotném prahu 0,8 — což je na Pepperu 400° —
+  # se k soudci nedostal, takže z celého zdroje chodily dvě zprávy na sto
+  # nabídek. 0,3 odpovídá 150°, tedy mediánu; pustí 29 položek místo 4.
+  #
+  # Nákladově je to malé: feedy se deduplikují podle guid, takže každý
+  # příspěvek jde k AI jednou za život, ne při každém běhu.
+  min_credibility_ai_shipping_ok: 0.3
 
   # Prahy podle druhu zboží. Klíč se hledá jako podřetězec v `Offer.category`.
   # Letenka za 5 % běžné ceny neexistuje; i legendární error fare bývá "jen"

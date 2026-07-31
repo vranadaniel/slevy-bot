@@ -280,6 +280,20 @@ Jediná pobočka té sítě, která by dávala smysl, je rakouská `ferienpirate
 spojení odmítne — ověřeno i z ostrého serveru, kde `curl` selhal za 181 ms.
 Není to blokace naší sítě, ten web na HTTPS prostě neodpovídá.
 
+**U Pepperu původní cena většinou vůbec není.** Parser je stavěný na `statt`,
+`UVP` a `RRP`, jenže ve vzorku 107 nabídek se neobjevilo **ani jedno**. Popisy
+znějí „192,49€ - AliExpress, Der Deal beginnt am 1. August" — je to komunitní
+tip, ne kalkulace slevy. Vylepšovat regulární výrazy je proto práce na špatném
+místě; hodnotu musí dodat AI soudce.
+
+Proto `thresholds.min_credibility_ai_shipping_ok`. Ze 107 nabídek jich **53
+pochází z obchodů s potvrzeným doručením do ČR**, ale jen 8 má původní cenu.
+Při jednotném prahu 0,8 (na Pepperu 400°) se k soudci dostaly 4 a z celého
+zdroje chodily dvě zprávy na sto nabídek. Nabídka, u které víme, že se dá
+koupit, si zaslouží nižší laťku než ta, u které to nevíme — 0,3 pustí 29 místo
+4. Nákladově je to malé, protože feedy se deduplikují podle `guid`, takže každý
+příspěvek jde k AI **jednou za život**, ne při každém běhu.
+
 **Zalando Lounge nejde a nešel by ani s přístupem.** Změřeno: titulní stránka
 je přihlašovací, `/api/campaigns` i `/api/mobile/campaigns` vracejí 403, běžné
 `zalando.cz/api/catalog` taky. V hlavních feedech Pepperu se Lounge zrovna

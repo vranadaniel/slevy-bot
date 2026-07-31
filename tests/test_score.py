@@ -337,15 +337,34 @@ class TestAiCandidates:
         verdict = scorer.prescore([offer])[0]
         assert _retry_later(scorer, verdict) is False
 
-    def test_lukewarm_feed_item_does_not_cost_ai_tokens(self, scorer):
-        offer = Offer(
-            source="mydealz", kind=FEED, uid="m1", name="Vlažný deal",
+    def _pepper(self, merchant, credibility, temperature):
+        return Offer(
+            source="mydealz", kind=FEED, uid=f"m{temperature}", name="Vlažný deal",
             price_czk=100.0, url="https://www.mydealz.de/deals/x",
-            category="Elektronik", merchant="Amazon",
-            credibility=0.3, extra={"temperature": 150},
+            category="Elektronik", merchant=merchant,
+            credibility=credibility, extra={"temperature": temperature},
         )
-        verdicts = scorer.prescore([offer])
-        assert scorer.ai_candidates(verdicts, limit=25) == []
+
+    def test_lukewarm_item_we_cannot_even_buy_costs_nothing(self, scorer):
+        """U neznámého obchodu se za odhad platit nemá — nedá se to koupit."""
+        offer = self._pepper("Nějaký Neznámý Shop", 0.3, 150)
+        assert scorer.ai_candidates(scorer.prescore([offer]), limit=25) == []
+
+    def test_lukewarm_item_with_confirmed_shipping_reaches_ai(self, scorer):
+        """Změřeno na Pepperu: ze 107 nabídek jich 53 doručuje do ČR, ale jen
+        8 má v textu původní cenu. Při jednotném prahu 0,8 (= 400°) se zbytek
+        k soudci nedostal a z celého zdroje chodily dvě zprávy na sto nabídek.
+        """
+        offer = self._pepper("Amazon", 0.3, 150)
+        verdict = scorer.prescore([offer])[0]
+
+        assert verdict.ships_to_cz is True
+        assert scorer.ai_candidates([verdict], limit=25) == [offer]
+
+    def test_really_cold_item_stays_out_even_when_deliverable(self, scorer):
+        """Nižší laťka není žádná laťka — 50° je pořád brak."""
+        offer = self._pepper("Amazon", 0.1, 50)
+        assert scorer.ai_candidates(scorer.prescore([offer]), limit=25) == []
 
 
 class TestPrilisHrubaPravidla:

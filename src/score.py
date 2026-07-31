@@ -60,6 +60,8 @@ class Scorer:
         self.by_category: dict = cfg.get("thresholds.by_category", {}) or {}
         self.min_cred_instant = float(cfg.get("thresholds.min_credibility_instant", 0.5))
         self.min_cred_ai = float(cfg.get("thresholds.min_credibility_ai", 0.8))
+        self.min_cred_ai_shipping_ok = float(
+            cfg.get("thresholds.min_credibility_ai_shipping_ok", self.min_cred_ai))
         self.require_shipping = bool(cfg.get("thresholds.require_ships_to_cz_for_instant", True))
         # Hry: ITAD sám okamžité upozornění nespouští, viz komentář v _finalize.
         self.itad_digest = float(cfg.get("itad.digest_factor", 1.0))
@@ -114,7 +116,7 @@ class Scorer:
                     candidates.append((offer.credibility * claimed, offer))
                 elif verdict.all_time_low and offer.credibility >= 0.7:
                     candidates.append((offer.credibility * 100, offer))
-            elif offer.credibility >= self.min_cred_ai:
+            elif offer.credibility >= self._ai_bar(verdict):
                 # U feedů rozhoduje důvěryhodnost, ať už vznikla z komunitní
                 # teploty, nebo z redakčního výběru. Letenku ani hotel žádný
                 # levný oracle ocenit neumí — bez téhle větve by cestování
@@ -123,6 +125,23 @@ class Scorer:
 
         candidates.sort(key=lambda pair: pair[0], reverse=True)
         return [offer for _, offer in candidates[:limit]]
+
+    def _ai_bar(self, verdict: Verdict) -> float:
+        """Od jaké důvěryhodnosti stojí feedová položka za dotaz na AI.
+
+        Nabídka, u které **víme, že se dá koupit do Česka**, si zaslouží nižší
+        laťku než ta, u které to nevíme. Ověřeno na živých datech Pepperu:
+        ze 107 nabídek jich 53 pochází z obchodů s potvrzeným doručením, ale
+        jen 8 má v textu původní cenu. Zbytek nikdo neocení a při jednotném
+        prahu 0,8 (což je 400° na Pepperu) se k soudci nedostane — proto z něj
+        chodily dvě zprávy na sto nabídek.
+
+        Cena je malá: feedy se deduplikují podle guid, takže každý příspěvek
+        jde k AI **jednou za život**, ne při každém běhu.
+        """
+        if verdict.ships_to_cz is True:
+            return self.min_cred_ai_shipping_ok
+        return self.min_cred_ai
 
     def apply_ai(self, verdicts: list[Verdict], values: dict[str, Value]) -> None:
         for verdict in verdicts:

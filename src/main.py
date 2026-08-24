@@ -23,8 +23,8 @@ import sys
 from .config import load_config
 from .fx import load_fx
 from .net import build_http
-from .notify import (Telegram, format_digest, format_health, format_instant,
-                     format_term, group_of)
+from .notify import (HRY, Telegram, format_digest, format_health,
+                     format_instant, format_term, group_of)
 from .oracles.declared import DeclaredOracle
 from .oracles.flights import FlightOracle
 from .oracles.history import HistoryOracle
@@ -191,7 +191,9 @@ def run_scan(cfg, args) -> int:
     # souhrnu — endpoint bere jednu hru na dotaz.
     if itad is not None:
         itad.enrich_popularity([v.offer for v in digest])
-        digest = drop_unpopular(digest, float(cfg.get("itad.min_popularity", 0.6)))
+        digest = drop_unpopular(
+            digest, float(cfg.get("itad.min_popularity", 0.6)),
+            bool(cfg.get("itad.require_known_popularity", True)))
 
     if args.dry_run:
         report(verdicts, instant, digest, scorer)
@@ -281,26 +283,48 @@ def _retry_later(scorer, verdict) -> bool:
             and verdict.offer.credibility >= scorer.min_cred_ai)
 
 
-def drop_unpopular(digest: list, min_popularity: float) -> list:
+def drop_unpopular(digest: list, min_popularity: float,
+                   require_known: bool = True) -> list:
     """Vyhodí hry, o které nikdo nestojí.
 
     Sleva sama o sobě vytahuje nahoru staré tituly — čím míň lidí hru chce,
-    tím hlouběji jde cena. Filtr se týká jen položek se **známou** popularitou,
-    tedy her, které ITAD zná. Neznámé se nechávají projít a v souhrnu spadnou
-    dolů; mlčet o něčem jen proto, že o tom nemáme data, by bylo horší.
+    tím hlouběji jde cena.
+
+    **Neznámá popularita je u her důvod k mlčení, ne k propuštění.** Původně to
+    bylo naopak, s odůvodněním „mlčet o něčem jen proto, že o tom nemáme data,
+    by bylo horší". To platilo, dokud byl katalog poloviční a neznámých pár.
+    Po rozšíření na celých 10 000 produktů se poměr obrátil: neznámá popularita
+    znamená buď že ji ITAD vůbec nezná (tedy obskurní šunta), nebo že jsme
+    vyčerpali strop dotazů — a v obou případech je to slabší kandidát než hra,
+    o které víme, že ji lidi chtějí. Sekce se pak plnila bezcennými tituly za
+    pár korun, protože ty mají nejextrémnější poměr ceny.
+
+    Týká se to jen HER. U předplatného, cestování a ostatního se popularita
+    nezjišťuje vůbec, takže by tenhle filtr vymazal celý souhrn.
     """
     if min_popularity <= 0:
         return digest
 
-    kept, dropped = [], 0
+    kept, nezajimave, nezname = [], 0, 0
     for verdict in digest:
         popularity = verdict.offer.extra.get("popularity")
-        if popularity is not None and popularity < min_popularity:
-            dropped += 1
+        je_hra = group_of(verdict.offer) == HRY
+
+        if popularity is None:
+            if je_hra and require_known:
+                nezname += 1
+                continue
+            kept.append(verdict)
+            continue
+
+        if popularity < min_popularity:
+            nezajimave += 1
             continue
         kept.append(verdict)
-    if dropped:
-        log.info("Ze souhrnu vypadlo %s neatraktivních her", dropped)
+
+    if nezajimave or nezname:
+        log.info("Ze souhrnu vypadlo %s neatraktivních her a %s s neznámou "
+                 "popularitou", nezajimave, nezname)
     return kept
 
 

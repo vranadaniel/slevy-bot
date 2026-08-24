@@ -236,7 +236,7 @@ class TestPopularity:
 
 
 class TestDropUnpopular:
-    def test_filters_only_known_low_popularity(self, setup):
+    def test_known_low_popularity_is_dropped(self, setup):
         from src.main import drop_unpopular
         from src.score import DIGEST, Verdict
 
@@ -244,12 +244,47 @@ class TestDropUnpopular:
         junk.offer.extra["popularity"] = 0.2
         hit = Verdict(offer=_game(uid="b"), level=DIGEST)
         hit.offer.extra["popularity"] = 0.8
+
+        kept = drop_unpopular([junk, hit], 0.5)
+        assert [v.offer.uid for v in kept] == ["b"]
+
+    def test_game_with_unknown_popularity_is_dropped(self, setup):
+        """Dřív se neznámé pouštěly. Po rozšíření skenu na celých 10 000
+        produktů se jimi sekce zaplnila — brak má nejextrémnější poměr ceny,
+        takže se v žebříčku dostal nahoru. Neznámá popularita znamená buď že
+        hru ITAD nezná, nebo že došel strop dotazů; obojí je slabší kandidát
+        než hra, o které víme, že ji lidi chtějí."""
+        from src.main import drop_unpopular
+        from src.score import DIGEST, Verdict
+
         unknown = Verdict(offer=_game(uid="c"), level=DIGEST)
+        assert drop_unpopular([unknown], 0.5) == []
 
-        kept = drop_unpopular([junk, hit, unknown], 0.5)
+    def test_unknown_can_still_be_allowed_from_config(self, setup):
+        from src.main import drop_unpopular
+        from src.score import DIGEST, Verdict
 
-        assert [v.offer.uid for v in kept] == ["b", "c"], \
-            "neznámá popularita není důvod mlčet"
+        unknown = Verdict(offer=_game(uid="c"), level=DIGEST)
+        assert drop_unpopular([unknown], 0.5, require_known=False) == [unknown]
+
+    def test_non_games_are_never_touched(self, setup):
+        """U předplatného a cestování se popularita nezjišťuje vůbec —
+        stejný filtr by vymazal celý zbytek souhrnu."""
+        from src.main import drop_unpopular
+        from src.score import DIGEST, Verdict
+        from src.sources.base import FEED, Offer
+
+        letenka = Verdict(offer=Offer(
+            source="zaletsi", kind=FEED, uid="t", name="Letenky z Prahy do Ria",
+            price_czk=9000.0, url="u", category="flight", merchant="zaletsi",
+            credibility=0.85, extra={}), level=DIGEST)
+        predplatne = Verdict(offer=Offer(
+            source="kinguin", kind="catalog", uid="s", name="Gemini AI Pro",
+            price_czk=65.0, url="u", category="INGAME_TOPUP", merchant="kinguin",
+            credibility=0.9, extra={"product_type": "INGAME_TOPUP"}), level=DIGEST)
+
+        kept = drop_unpopular([letenka, predplatne], 0.5)
+        assert [v.offer.uid for v in kept] == ["t", "s"]
 
     def test_zero_threshold_disables_the_filter(self, setup):
         from src.main import drop_unpopular

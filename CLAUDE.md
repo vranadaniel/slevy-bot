@@ -121,6 +121,17 @@ seznamu `digest`, ne v `prepare()`. Vzorec kombinuje počet hodnocení
 — padají na `Offer.credibility`, tedy prodejnost na Kinguinu. `stats.rank`
 z ITAD se schválně nepoužívá: neměřili jsme jeho rozložení.
 
+**Neznámá popularita je u her důvod k mlčení.** Původně to bylo naopak —
+„mlčet o něčem jen proto, že o tom nemáme data, by bylo horší". To platilo,
+dokud byl katalog poloviční. Po rozšíření na celých 10 000 produktů se poměr
+obrátil: neznámá popularita znamená buď že hru ITAD nezná (obskurní šunta),
+nebo že došel strop `max_info_per_run` — a v obou případech je to slabší
+kandidát než hra, o které víme, že ji lidi chtějí. Sekce se jinak plní
+bezcennými tituly za pár korun, protože ty mají nejextrémnější poměr ceny
+a v `notify._rank_key` se dostanou nahoru. Řídí to
+`itad.require_known_popularity` a týká se to **jen her**; u předplatného
+a cestování se popularita nezjišťuje, takže by tentýž filtr vymazal souhrn celý.
+
 **Popularita se nedostala do `score.py`.** Je to věc řazení a filtrování
 souhrnu, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.
 Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`. Filtr

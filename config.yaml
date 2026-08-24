@@ -262,12 +262,22 @@ itad:
   # spadnou na pozici v žebříčku prodejnosti Kinguinu: 0,6 odpovídá zhruba
   # 670. nejprodávanější položce.
   info_ttl_days: 30
-  max_info_per_run: 120
+  # Po rozšíření skenu na celých 10 000 produktů je her v souhrnu podstatně
+  # víc, takže strop 120 nechával většinu bez hodnocení. Cache drží měsíc,
+  # takže je to jednorázová práce; ustálený stav je pár dotazů na běh.
+  max_info_per_run: 250
   # Pod tímhle prahem se hra do souhrnu vůbec nedostane. Nula filtr vypne.
   # 0,6 je zhruba "aspoň dvě stě padesát hodnocení". Když bude sekce s hrami
   # chodit prázdná, sniž na 0,5; když se v ní pořád objevuje brak, zvyš na 0,7.
   # Skutečná čísla u konkrétní hry ukáže `--explain`.
   min_popularity: 0.6
+  # Hra, u které popularitu NEZNÁME, do souhrnu nepatří. Buď ji ITAD vůbec
+  # nezná (obskurní šunta), nebo jsme vyčerpali strop dotazů — v obou
+  # případech je to slabší kandidát než hra, o které víme, že ji lidi chtějí.
+  # Dřív se neznámé pouštěly; při polovičním katalogu jich bylo pár, po
+  # rozšíření se jimi sekce zaplnila, protože brak má nejextrémnější poměr.
+  # Týká se JEN her; u předplatného a cestování se popularita nezjišťuje.
+  require_known_popularity: true
 
 judge:
   enabled: true

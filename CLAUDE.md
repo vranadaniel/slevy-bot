@@ -26,12 +26,11 @@ python -m src.main --only travel             # jen letenky a hotely, běh na vte
 python -m src.main --dry-run --explain UID   # rozpad signálů u položky (název i uid)
 python -m src.main --dump offers.json        # syrová data ze zdrojů
 python -m src.main --check-itad              # ověří ITAD klíč a měnu odpovědí
+python -m src.main --check-travelpayouts     # ověří token a tvar odpovědi Aviasales
 python -m src.main --test-telegram
 python -m src.main --bootstrap               # označí feedy za viděné, nic nepošle
-```
-
-```bash
-python -m src.main --stats                   co bot nasbíral, bez sahání na síť
+python -m src.main --stats                   # co bot nasbíral, bez sahání na síť
+python -m src.main --backup                  # konzistentní kopie databáze
 ```
 
 `--explain` je hlavní ladicí nástroj — ukáže cenu, credibility, odkud přišla
@@ -44,9 +43,8 @@ položka viděná dvakrát, ale zralá až za dva dny. Dokud je nula, katalogov�
 zdroj mlčí právem.
 
 Že katalogové cestování mlčí i se zralou historií je taky normální: trasa musí
-spadnout **30 % pod vlastní medián**, aby se dostala do souhrnu, a **55 %**,
-aby pingla. Ceny dopravců se takhle nehýbou často. Kde přesně ty trasy jsou,
-ukáže `--dry-run --only travel` v sekci TĚSNĚ POD PRAHEM.
+spadnout **30 % pod vlastní medián** do souhrnu a **55 %** na okamžité
+upozornění. Ceny dopravců se takhle nehýbou často.
 
 `--dry-run` má sekci **TĚSNĚ POD PRAHEM**: oceněné nabídky, které práh minuly,
 seřazené podle toho, o kolik. Je to jediný způsob, jak poznat, jestli jsou
@@ -74,17 +72,20 @@ data pocházejí — žádné `if source == "kinguin"` v `score.py`, `store.py` 
 
 `Source.kind` rozlišuje `catalog` a `feed` a `score.py` podle toho volí větev:
 
-- **catalog** (Kinguin) — tutéž položku vidíme opakovaně, stavíme si vlastní
-  cenovou historii, deduplikuje se podle uid a poklesu ceny
-- **feed** (Pepper, fly4free) — proud jedinečných příspěvků, historie nedává
-  smysl, deduplikuje se podle `guid` v tabulce `seen`
+- **catalog** (Kinguin, Ryanair, Wizz Air, Travelpayouts) — tutéž položku vidíme
+  opakovaně, stavíme si vlastní cenovou historii, deduplikuje se podle uid
+  a poklesu ceny
+- **feed** (Pepper, cestujlevne, zaletsi, travelfree, fly4free) — proud
+  jedinečných příspěvků, historie nedává smysl, deduplikuje se podle `guid`
+  v tabulce `seen`
 
 Sloučit je do jednoho rozhraní by bylo chybné.
 
 ### Pořadí oracles je významné
 
 V `main.py`: `history → references → flights → itad → declared`, AI běží zvlášť
-dávkově až na tom, co zbylo. První oracle s odpovědí vyhrává, takže levné a důvěryhodné
+dávkově až na tom, co zbylo. Katalogové cestování se k AI nedostane vůbec, viz
+`catalog_history_only` níž. První oracle s odpovědí vyhrává, takže levné a důvěryhodné
 zdroje předbíhají placené. `HistoryOracle` schválně vrací `None`, když cena
 neklesla pod vlastní medián — tím pustí ke slovu ostatní.
 
@@ -121,7 +122,7 @@ za 60 Kč má v logu dva řádky a medián 104 Kč, přestože běžná cena je 
 
 **Popularita her se zjišťuje až u položek mířících do souhrnu.** Endpoint
 `/games/info/v2` bere jednu hru na dotaz, takže na celém katalogu by to bylo
-5 000 požadavků. `ItadOracle.enrich_popularity` proto běží v `main.py` až na
+10 000 požadavků. `ItadOracle.enrich_popularity` proto běží v `main.py` až na
 seznamu `digest`, ne v `prepare()`. Vzorec kombinuje počet hodnocení
 (logaritmicky) a skóre; hry bez hodnocení na Steamu — Battlefield, Call of Duty
 — padají na `Offer.credibility`, tedy prodejnost na Kinguinu. `stats.rank`

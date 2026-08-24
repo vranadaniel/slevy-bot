@@ -1,6 +1,6 @@
 # Bot na lov extrémních slev → Telegram
 
-Hlídá tři zdroje a posílá na Telegram jen věci, které stojí zlomek své skutečné ceny.
+Hlídá deset zdrojů a posílá na Telegram jen věci, které stojí zlomek své skutečné ceny.
 Vznikl kvůli jedné konkrétní nabídce: **Google Gemini AI Pro na 18 měsíců za 65 Kč**,
 tedy necelé procento běžné ceny.
 
@@ -13,15 +13,27 @@ Dvě úrovně upozornění: **extrém pingne hned**, zbytek přijde večer jako 
 | Zdroj | Druh | Co odtud chodí | Klíč |
 |---|---|---|---|
 | **Kinguin** | katalog | předplatné, software, herní klíče | není potřeba |
-| **Pepper** (mydealz.de, hotukdeals.com, dealabs.com, pepper.pl) | feed | elektronika, móda, cestování, cokoliv | není potřeba |
-| **fly4free.com** | feed | letenky a hotely včetně error fare | není potřeba |
+| **Ryanair** | katalog | 210 tras z našich letišť, zpáteční i jednosměrné | není potřeba |
+| **Wizz Air** | katalog | 58 tras, hlavně z Bratislavy | není potřeba |
+| **Travelpayouts** (Aviasales) | katalog | až 100 nejlevnějších cílů na letiště, napříč dopravci | token zdarma |
+| **Pepper** (mydealz, hotukdeals, dealabs, pepper.pl) | feed | elektronika, móda, cokoliv | není potřeba |
+| **cestujlevne.com**, **zaletsi.cz** | feed | česky, v korunách: letenky i zájezdy | není potřeba |
+| **travelfree.info**, **fly4free.com** | feed | letenky a hotely včetně error fare | není potřeba |
+
+**Katalog vs. feed není kosmetický rozdíl.** U katalogu vidíme tutéž položku při
+každém běhu, takže si stavíme **vlastní cenovou historii** — jedinou referenci,
+kterou nikdo nemůže zfalšovat. Feed je proud jedinečných příspěvků, kde se dá
+jen věřit tomu, co redakce nebo komunita napíše.
 
 Referenční ceny her doplňuje **IsThereAnyDeal** — free klíč z
 [isthereanydeal.com/apps/my/](https://isthereanydeal.com/apps/my/), bez něj bot běží dál,
 jen hry zůstanou neoceněné.
 
 Fyzické zboží ze zahraničních e-shopů projde jen tehdy, když obchod doručuje do ČR
-(seznam v `merchants.yaml`). Letenky se filtrují na PRG, BRQ, PED, OSR, VIE a BTS.
+(seznam v `merchants.yaml`). Letenky se filtrují na PRG, BRQ, PED, OSR, VIE a BTS —
+plus patnáct evropských uzlů (Dublin, Frankfurt, Londýn…), ale ty **jen u dálkových
+cílů**: doletět do Dublinu a ušetřit deset tisíc na Ameriku dává smysl, jet do
+Frankfurtu kvůli Malaze ne.
 
 ---
 
@@ -34,9 +46,10 @@ Reálnou hodnotu hledá pětice „oracles" v pořadí od nejdůvěryhodnější
 
 1. **vlastní cenová historie** — nejsilnější, nikdo ji neovlivní, ale potřebuje pár dní
 2. **`references.yaml`** — ruční ceník, překlenuje studený start u předplatného
-3. **IsThereAnyDeal** — referenční ceny her napříč 50+ oficiálními obchody
-4. **cena z příspěvku** — u Pepperu, kde ji píše komunita
-5. **AI soudce** — poslední instance pro položky, které nikdo jiný neocení
+3. **`flights.yaml`** — ceník letenek po regionech světa; platí jen pro feedy
+4. **IsThereAnyDeal** — referenční ceny her napříč 50+ oficiálními obchody
+5. **cena z příspěvku** — u Pepperu, kde ji píše komunita
+6. **AI soudce** — poslední instance pro položky, které nikdo jiný neocení
 
 ### Hry: proč ITAD nespouští okamžitá upozornění
 
@@ -102,8 +115,13 @@ python -m venv .venv
 Tokeny do prostředí (PowerShell):
 
 ```powershell
-$env:TELEGRAM_BOT_TOKEN = "…"; $env:TELEGRAM_CHAT_ID = "…"; $env:OPENROUTER_API_KEY = "…"
+$env:TELEGRAM_BOT_TOKEN = "…"; $env:TELEGRAM_CHAT_ID = "…"
+$env:OPENROUTER_API_KEY = "…"; $env:ITAD_API_KEY = "…"; $env:TRAVELPAYOUTS_TOKEN = "…"
 ```
+
+Povinné jsou jen ty dva telegramové. Bez `OPENROUTER_API_KEY` mlčí AI soudce,
+bez `ITAD_API_KEY` zůstanou hry neoceněné a bez `TRAVELPAYOUTS_TOKEN` se ten
+zdroj tiše přeskočí — **chybějící volitelný klíč nesmí nic shodit**.
 
 Zkušební průchod, který nic neodesílá ani nezapisuje:
 
@@ -165,8 +183,13 @@ systemctl start slevy-digest         # poslat souhrn hned
 
 | Jednotka | Kdy | Co dělá |
 |---|---|---|
-| `slevy-scan.timer` | v :13 a :43 každou hodinu | projde zdroje, pošle okamžitá upozornění |
+| `slevy-scan.timer` | v :13 a :43 každou hodinu | projde všechny zdroje, pošle okamžitá upozornění |
+| `slevy-travel.timer` | každých 10 minut | jen cestování — error fare mizí během hodin |
 | `slevy-digest.timer` | 19:09 místního času | odešle nasbírané položky |
+| `slevy-backup.timer` | 4:20 | konzistentní kopie databáze, drží posledních sedm |
+
+Minuty jsou schválně nekulaté a různé: rychlý sken cestování a hlavní sken sahají
+na tutéž SQLite databázi, takže se nemají potkávat.
 
 ```bash
 systemctl list-timers 'slevy-*'
@@ -197,13 +220,28 @@ python -m src.main --dry-run --explain gemini    # rozepíše signály u položk
 python -m src.main --bootstrap                   # první běh, jen označí viděné
 python -m src.main                               # ostrý sken
 python -m src.main --digest                      # odešle denní souhrn
+python -m src.main --only travel                  # jen letenky a hotely, běh na vteřiny
+python -m src.main --stats                       # co bot nasbíral, bez sahání na síť
+python -m src.main --backup                      # konzistentní kopie databáze
 python -m src.main --dump offers.json            # syrová data na diagnostiku
 python -m src.main --test-telegram               # ověří token a chat_id
+python -m src.main --check-itad                  # ověří klíč k IsThereAnyDeal
+python -m src.main --check-travelpayouts         # ověří token a tvar odpovědi
 python -m src.main --no-ai                       # vypne AI soudce
 ```
 
 `--explain` je hlavní nástroj na ladění. Ukáže cenu, důvěryhodnost, odkud přišla
 reálná hodnota a proč to skončilo tak, jak to skončilo.
+
+`--stats` odpovídá na otázku „funguje to vůbec". Nejdůležitější sloupec je
+**zralé** — kolik položek už umí ocenit vlastní cenová historie. Měří se **časem
+od prvního záznamu**, ne počtem pozorování: po dvou skenech je trasa viděná
+dvakrát, ale zralá až za dva dny. Dokud je nula, katalogový zdroj mlčí právem.
+
+`--dry-run` má sekci **TĚSNĚ POD PRAHEM**: oceněné nabídky, které práh minuly,
+seřazené podle toho o kolik. Je to jediný způsob, jak poznat, jestli jsou prahy
+utažené správně — plná sekce položek, kterým chybí pár procent, znamená, že se
+práh možná ubírá o kus moc.
 
 ---
 
@@ -261,9 +299,21 @@ prahy — letenka za 5 % běžné ceny neexistuje:
 ```yaml
 thresholds:
   by_category:
-    flight: {instant_ratio: 0.45, digest_ratio: 0.70}
-    hotel:  {instant_ratio: 0.45, digest_ratio: 0.70}
+    flight: &cestovani {instant_ratio: 0.45, digest_ratio: 0.70,
+                        catalog_history_only: true}
+    hotel: *cestovani
+    urlaub: *cestovani      # Pepper píše kategorie v jazyce svého webu
 ```
+
+`catalog_history_only` je tam po nepříjemné zkušenosti. Ceník `flights.yaml`
+vznikl z cen, které slevové weby **vypsaly jako akci** — proti ceníku dopravce
+je to jiná populace a Ryanair pak vycházel levně vždycky. Katalogové letenky
+proto smí ocenit **jen jejich vlastní historie**; ani AI soudce k nim nesmí,
+protože by trase vymyslel „běžnou cenu" a kruh by se zavřel o patro níž.
+
+Prakticky to znamená, že **Ryanair, Wizz Air a Travelpayouts první dva dny
+mlčí** a pak posílají jen skutečné propady: trasa musí spadnout 30 % pod svůj
+vlastní medián do souhrnu a 55 % na okamžité upozornění.
 
 Běžné ceny letenek jsou v **`flights.yaml`** — ceník po regionech světa,
 postavený na reálných nabídkách z cestujlevne.com, travelfree.info
@@ -280,15 +330,21 @@ a fly4free.com:
 Evropy leží na 36 % běžné, do jihovýchodní Asie na 62 %. Bez toho by práh
 nastavený na Evropu dálkové lety umlčel.
 
+Cizí uzly řídí `hub_airports` a `hub_min_typical_czk`. Rozhoduje `typical_czk`
+regionu z téhož ceníku, ne další ruční seznam — data se dělí sama: dálkové
+regiony mají 12 000 Kč a výš, celá Evropa 2 500–4 500. Nabídka z Dublinu do
+Toronta tedy projde, z Berlína na Madeiru ne.
+
 Zdroje se přidávají v `config.yaml` pod `sources.travel.sites`, kód se kvůli
-tomu upravovat nemusí. `airport` u feedu znamená „tenhle feed je pro dané
+tomu upravovat nemusí — `zaletsi.cz` prošel existujícím parserem bez jediné
+úpravy a je to čistě řádek v konfiguraci. `airport` u feedu znamená „tenhle feed je pro dané
 letiště celý relevantní" — hodí se na tagové feedy typu
 `travelfree.info/tag/prague/feed/`.
 
 Error fare mizí během hodin, takže cestování běží na vlastním rychlém timeru:
 
 ```bash
-python -m src.main --only travel     # šest feedů, běh na vteřiny
+python -m src.main --only travel     # feedy i dopravci, běh na vteřiny
 ```
 
 ### `references.yaml`
@@ -362,13 +418,19 @@ src/
 ├── money.py          parsování cen ze čtyř národních zápisů
 ├── fx.py             kurzy ČNB
 ├── notify.py         Telegram
+├── text.py           skládání českých tvarů bez diakritiky
 ├── sources/          odkud nabídky chodí
-│   ├── kinguin.py    katalog
-│   ├── pepper.py     čtyři weby jedním parserem
-│   └── fly4free.py   letenky
+│   ├── kinguin.py         katalog klíčů a předplatného
+│   ├── pepper.py          čtyři weby jedním parserem
+│   ├── travel.py          čtyři cestovatelské feedy jedním parserem
+│   ├── ryanair.py         katalog: zpáteční i jednosměrné
+│   ├── wizzair.py         katalog: ceny po dnech
+│   └── travelpayouts.py   katalog: nejlevnější cíle napříč dopravci
 └── oracles/          co ta věc doopravdy stojí
     ├── history.py    vlastní cenová historie
     ├── refs.py       ruční ceník
+    ├── flights.py    ceník letenek po regionech
+    ├── itad.py       IsThereAnyDeal
     ├── declared.py   cena z příspěvku
     └── judge.py      AI přes OpenRouter
 ```

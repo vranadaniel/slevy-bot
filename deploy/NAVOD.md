@@ -5,7 +5,7 @@ zhruba deset minut.
 
 ---
 
-## Než začneš: připrav si čtyři hodnoty
+## Než začneš: připrav si pět hodnot
 
 **GitHub Secrets se nedají přečíst zpátky** — jsou jednosměrné. Když sis tokeny
 nikam neuložil, musíš si je obstarat znovu. Připrav si je do poznámkového bloku
@@ -17,9 +17,10 @@ ještě předtím, než se přihlásíš na server.
 | `TELEGRAM_CHAT_ID` | znáš z dřívějška, nebo se dá znovu vypsat (viz krok 6) |
 | `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) — starý klíč nejde zobrazit, vytvoř nový |
 | `ITAD_API_KEY` | [isthereanydeal.com/apps/my/](https://isthereanydeal.com/apps/my/) → tvoje aplikace |
+| `TRAVELPAYOUTS_TOKEN` | [travelpayouts.com](https://www.travelpayouts.com) → registrace zdarma → API token |
 
-Poslední dva jsou volitelné. Bez nich bot běží dál, jen hry a neznámé položky
-zůstanou neoceněné.
+Poslední tři jsou volitelné. Bez nich bot běží dál — jen mlčí AI soudce,
+hry zůstanou neoceněné a nejlevnější cíle napříč dopravci se nesbírají.
 
 ---
 
@@ -160,13 +161,14 @@ Uvidíš tabulku s tím, **kdy poběží příště** — přesně ten přehled,
 GitHub Actions nikdy neuměly zobrazit:
 
 ```
-NEXT                        LEFT     UNIT                ACTIVATES
-Fri 2026-07-24 12:20:00 CET 3min     slevy-travel.timer  slevy-travel.service
-Fri 2026-07-24 12:43:00 CET 21min    slevy-scan.timer    slevy-scan.service
-Fri 2026-07-24 19:09:00 CET 7h       slevy-digest.timer  slevy-digest.service
+NEXT                        LEFT     UNIT                 ACTIVATES
+Fri 2026-07-24 12:20:00 CET 3min     slevy-travel.timer   slevy-travel.service
+Fri 2026-07-24 12:43:00 CET 21min    slevy-scan.timer     slevy-scan.service
+Fri 2026-07-24 19:09:00 CET 7h       slevy-digest.timer   slevy-digest.service
+Sat 2026-07-25 04:20:00 CET 16h      slevy-backup.timer   slevy-backup.service
 ```
 
-Když jsou ve všech třech řádcích rozumné časy, máš hotovo. Hlavní sken poběží
+Když jsou ve všech čtyřech řádcích rozumné časy, máš hotovo. Hlavní sken poběží
 v :13 a :43 každou hodinu, rychlý sken letenek každých deset minut a souhrn
 v 19:09.
 
@@ -235,7 +237,7 @@ systemctl start slevy-travel && journalctl -u slevy-travel -n 30 --no-pager
 **Chci to celé vypnout**
 
 ```bash
-systemctl disable --now slevy-scan.timer slevy-travel.timer slevy-digest.timer
+systemctl disable --now slevy-scan.timer slevy-travel.timer \n                        slevy-digest.timer slevy-backup.timer
 ```
 
 ---

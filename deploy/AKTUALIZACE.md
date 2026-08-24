@@ -85,9 +85,10 @@ Mají se vypsat **tři řádky** a u každého čas, kdy poběží příště:
 
 ```
 NEXT                        LEFT     UNIT                ACTIVATES
-Mon 2026-07-27 21:20:00 CEST 3min    slevy-travel.timer  slevy-travel.service
-Mon 2026-07-27 21:43:00 CEST 26min   slevy-scan.timer    slevy-scan.service
-Tue 2026-07-28 19:09:00 CEST 21h     slevy-digest.timer  slevy-digest.service
+Mon 2026-07-27 21:20:00 CEST 3min    slevy-travel.timer   slevy-travel.service
+Mon 2026-07-27 21:43:00 CEST 26min   slevy-scan.timer     slevy-scan.service
+Tue 2026-07-28 04:20:00 CEST 7h      slevy-backup.timer   slevy-backup.service
+Tue 2026-07-28 19:09:00 CEST 21h     slevy-digest.timer   slevy-digest.service
 ```
 
 Co které je:
@@ -182,3 +183,38 @@ bash /opt/slevy-bot/deploy/install.sh
 
 Restart služeb řešit nemusíš. Každý běh časovače startuje nový proces, takže
 další sken jede automaticky už na nové verzi.
+
+---
+
+## Když ti přijde, že nic nechodí
+
+Dřív než začneš hledat poruchu, podívej se na tohle:
+
+```bash
+cd /opt/slevy-bot && sudo -u slevy .venv/bin/python -m src.main --stats
+```
+
+Sahá jen do databáze, ne na internet, takže se tím nedá nic pokazit. Čti to
+takhle:
+
+| Co vidíš | Co to znamená |
+|---|---|
+| **zralé = 0** u letenek | ještě není z čeho počítat, historie potřebuje dva dny |
+| **zralé > 0**, ale nic nechodí | ceny se prostě nehýbou dost — viz níž |
+| **ZDRAVÍ ZDROJŮ** hlásí selhání | zdroj je zablokovaný nebo změnil formát |
+| **AI soudce** na stropu | vyčerpaný denní limit, zbytek se doocení zítra |
+
+Katalogové letenky (Ryanair, Wizz Air, Travelpayouts) smí ocenit **jen jejich
+vlastní cenová historie**. Trasa musí spadnout **30 % pod svůj vlastní medián**,
+aby se dostala do souhrnu, a **55 %** na okamžité upozornění. Ceny dopravců se
+takhle nehýbou často, takže ticho je normální stav, ne porucha.
+
+Kde přesně ty trasy jsou, ukáže:
+
+```bash
+cd /opt/slevy-bot && sudo -u slevy .venv/bin/python -m src.main --dry-run --only travel
+```
+
+V sekci **TĚSNĚ POD PRAHEM** uvidíš nabídky, které práh minuly, a hlavně
+**o kolik**. Když jich je hodně s odstupem pár procent, je práh utažený moc.
+Když je prázdná, ceny se opravdu nehýbou a řešením je trpělivost.

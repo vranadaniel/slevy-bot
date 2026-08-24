@@ -134,9 +134,7 @@ a cestování se popularita nezjišťuje, takže by tentýž filtr vymazal souhr
 
 **Popularita se nedostala do `score.py`.** Je to věc řazení a filtrování
 souhrnu, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.
-Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`. Filtr
-se týká jen položek se **známou** popularitou — mlčet o něčem jen proto, že
-o tom nemáme data, by bylo horší než to poslat.
+Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`.
 
 **`INGAME_TOPUP` na Kinguinu není hra.** Navzdory názvu je to škatulka na
 předplatné: YouTube Premium, Spotify, ChatGPT i to referenční Gemini za 65 Kč.

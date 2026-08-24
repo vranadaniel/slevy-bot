@@ -339,26 +339,34 @@ class Store:
 
     # ---------- přehled o stavu ----------
 
-    def stats_sources(self) -> list[dict]:
+    def stats_sources(self, min_span_days: float = 2.0) -> list[dict]:
         """Zralost cenové historie po zdrojích.
 
-        Klíčové číslo je `zrale`: kolik položek už má aspoň dvě pozorování
-        s odstupem, tedy kolik jich `HistoryOracle` vůbec umí ocenit. Dokud
-        je nula, katalogový zdroj mlčí — a je užitečné vidět, že je to tím,
-        a ne poruchou.
+        Klíčové číslo je `zrale`: kolik položek už umí ocenit `HistoryOracle`.
+        Ten vyžaduje, aby od PRVNÍHO záznamu v `price_log` uplynulo aspoň
+        `min_span_days` — proto se tu počítá totéž, a ne jen „viděli jsme to
+        dvakrát". Ta dvě čísla se rozcházejí o dny a sloupec, který tvrdí
+        „zralé", zatímco zdroj právem mlčí, je horší než žádný.
         """
+        hranice = (dt.datetime.now(dt.timezone.utc)
+                   - dt.timedelta(days=min_span_days)).isoformat()
         rows = self.conn.execute(
             """
             SELECT p.source,
-                   COUNT(*)                                   AS polozek,
-                   SUM(CASE WHEN p.prev_min IS NOT NULL THEN 1 ELSE 0 END) AS zrale,
-                   MIN(p.first_seen)                          AS nejstarsi,
-                   MAX(p.last_seen)                           AS naposledy,
-                   SUM(p.samples)                             AS pozorovani
+                   COUNT(*)                                        AS polozek,
+                   SUM(CASE WHEN l.prvni IS NOT NULL AND l.prvni <= ?
+                            THEN 1 ELSE 0 END)                     AS zrale,
+                   MIN(p.first_seen)                               AS nejstarsi,
+                   MAX(p.last_seen)                                AS naposledy,
+                   SUM(p.samples)                                  AS pozorovani
             FROM products p
+            LEFT JOIN (SELECT source, uid, MIN(ts) AS prvni
+                       FROM price_log GROUP BY source, uid) l
+                   ON l.source = p.source AND l.uid = p.uid
             GROUP BY p.source
             ORDER BY polozek DESC
-            """
+            """,
+            (hranice,),
         ).fetchall()
         return [dict(r) for r in rows]
 

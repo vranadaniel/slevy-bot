@@ -38,9 +38,15 @@ python -m src.main --stats                   co bot nasbíral, bez sahání na s
 hodnota a proč verdikt dopadl, jak dopadl.
 
 `--stats` odpovídá na otázku „funguje to vůbec". Nejdůležitější sloupec je
-**zralé**: kolik položek už má porovnání proti dřívější ceně, tedy kolik jich
-`HistoryOracle` umí ocenit. Dokud je nula, katalogový zdroj mlčí právem — a je
-dobré to vidět, místo aby to vypadalo jako porucha.
+**zralé**: kolik položek už umí ocenit `HistoryOracle`. Měří se **časem od
+prvního záznamu v `price_log`**, ne počtem pozorování — po dvou skenech je
+položka viděná dvakrát, ale zralá až za dva dny. Dokud je nula, katalogový
+zdroj mlčí právem.
+
+Že katalogové cestování mlčí i se zralou historií je taky normální: trasa musí
+spadnout **30 % pod vlastní medián**, aby se dostala do souhrnu, a **55 %**,
+aby pingla. Ceny dopravců se takhle nehýbou často. Kde přesně ty trasy jsou,
+ukáže `--dry-run --only travel` v sekci TĚSNĚ POD PRAHEM.
 
 `--dry-run` má sekci **TĚSNĚ POD PRAHEM**: oceněné nabídky, které práh minuly,
 seřazené podle toho, o kolik. Je to jediný způsob, jak poznat, jestli jsou

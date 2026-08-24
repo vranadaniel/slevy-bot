@@ -40,11 +40,42 @@ class TestZralostHistorie:
         assert radek["polozek"] == 1
         assert radek["zrale"] == 0, "první pozorování není historie"
 
-    def test_second_observation_makes_it_mature(self, store):
+    def test_two_observations_are_not_enough(self, store):
+        """Zralost se meri CASEM, ne poctem pozorovani.
+
+        HistoryOracle vyzaduje aspon min_span_days od prvniho zaznamu. Sloupec,
+        ktery po dvou skenech (tedy po pul hodine) tvrdi "zrale", zatimco zdroj
+        pravem mlci, je horsi nez zadny - presne tohle vedlo k otazce, proc
+        z Ryanairu a Wizz Airu nic nechodi.
+        """
         store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 900.0)
         store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 800.0)
 
+        assert store.stats_sources()[0]["zrale"] == 0
+
+    def test_old_enough_history_counts_as_mature(self, store):
+        store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 900.0)
+        stare_ts = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=5)).isoformat()
+        store.conn.execute("UPDATE price_log SET ts = ?", (stare_ts,))
+
         assert store.stats_sources()[0]["zrale"] == 1
+
+    def test_maturity_matches_what_the_oracle_requires(self, store):
+        """Cislo v prehledu musi znamenat "tohle uz umime ocenit"."""
+        from src.oracles.history import HistoryOracle
+        from src.sources.base import CATALOG, Offer
+
+        oracle = HistoryOracle(store)
+        store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 1500.0)
+        stare_ts = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=5)).isoformat()
+        store.conn.execute("UPDATE price_log SET ts = ?", (stare_ts,))
+
+        offer = Offer(source="ryanair", kind=CATALOG, uid="PRG-BGY", name="Letenky",
+                      price_czk=900.0, url="u", category="flight",
+                      merchant="ryanair", credibility=1.0, extra={})
+
+        assert store.stats_sources(oracle.min_span_days)[0]["zrale"] == 1
+        assert oracle.value_of(offer) is not None
 
     def test_sources_are_reported_separately(self, store):
         store.record_price("ryanair", "PRG-BGY", "A", "u", "flight", 900.0)

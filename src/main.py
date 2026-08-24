@@ -551,7 +551,9 @@ def run_stats(cfg) -> int:
     store = Store(cfg.db_path)
     print(f"Databáze: {cfg.db_path}\n")
 
-    zdroje = store.stats_sources()
+    # Stejna mez, jakou pouziva HistoryOracle - at sloupec zrale znamena
+    # doopravdy "tohle uz umime ocenit", ne "videli jsme to dvakrat".
+    zdroje = store.stats_sources(HistoryOracle(store).min_span_days)
     if not zdroje:
         print("Katalog je prázdný — bot ještě neproběhl.")
         store.close()

@@ -15,10 +15,13 @@ from src.sources.travel import TravelSource
 
 
 class FakeResponse:
-    def __init__(self, content: bytes, status_code: int = 200, headers=None) -> None:
+    def __init__(self, content: bytes, status_code: int = 200, headers=None,
+                 url: str = "https://example.test/") -> None:
         self.content = content
         self.status_code = status_code
         self.headers = headers or {}
+        self.url = url
+        self.text = content.decode("utf-8", "replace")
 
 
 class FakeHttp:
@@ -377,7 +380,7 @@ class TestConditionalFetch:
         self._source(http2, store).fetch()
         store.close()
 
-        assert http.sent[0] == {}, "poprvé nemáme co poslat"
+        assert "If-None-Match" not in http.sent[0], "poprvé nemáme co poslat"
         assert http2.sent[0]["If-None-Match"] == '"abc"'
 
     def test_unchanged_feed_is_skipped(self, tmp_path):
@@ -397,7 +400,15 @@ class TestConditionalFetch:
         source.fetch()
         source.fetch()
 
-        assert all(sent == {} for sent in http.sent)
+        assert all("If-None-Match" not in sent for sent in http.sent)
+
+    def test_feeds_ask_for_rss_like_a_browser(self):
+        """`requests` posílá holé `*/*` — u WAF nad WordPressem je to jeden
+        ze signálů „tohle je bot". Prohlížeč řekne, co čeká."""
+        http = self.RecordingHttp([self._xml()])
+        self._source(http, store=None).fetch()
+
+        assert "rss" in http.sent[0]["Accept"]
 
 
 class TestRyanairOdkaz:
@@ -501,3 +512,47 @@ class TestBuildSources:
 
         with pytest.raises(SystemExit):
             build_sources(FakeHttp([]), FakeFx(), Config(), only="letenky")
+
+
+class TestNeopakovat4xx:
+    """403 se opakováním nespraví.
+
+    Trojnásobek požadavků na WAF, který nás právě odmítl, je nejjistější
+    způsob, jak si blokaci potvrdit natrvalo — a v logu to vypadá stejně
+    jako jediný pokus.
+    """
+
+    def _http(self, status):
+        from src.net import Http
+
+        http = Http("test-agent", timeout_s=1, retries=3)
+        pokusy = []
+
+        def fake_get(url, **kwargs):
+            pokusy.append(url)
+            return FakeResponse(b"ne", status, {})
+
+        http.session.get = fake_get
+        return http, pokusy
+
+    def test_forbidden_is_asked_only_once(self):
+        from src.net import TrvaleOdmitnuto
+
+        http, pokusy = self._http(403)
+        with pytest.raises(TrvaleOdmitnuto):
+            http.get("https://example.test/feed/")
+
+        assert len(pokusy) == 1
+
+    def test_rate_limit_is_still_retried(self):
+        """429 znamená „teď ne", ne „ne" — tam opakování smysl dává."""
+        http, pokusy = self._http(429)
+        with pytest.raises(RuntimeError):
+            http.get("https://example.test/feed/")
+
+        assert len(pokusy) == 3
+
+    def test_probe_returns_the_code_instead_of_raising(self):
+        """Pro oťukání verze API je 404 platná odpověď, ne porucha."""
+        http, _ = self._http(404)
+        assert http.probe("https://example.test/x") == 404

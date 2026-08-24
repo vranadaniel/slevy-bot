@@ -16,6 +16,14 @@ import requests
 log = logging.getLogger(__name__)
 
 
+class TrvaleOdmitnuto(RuntimeError):
+    """Odpověď 4xx kromě 429 — opakovat ji nemá smysl.
+
+    Server neřekl „teď ne", ale „ne". Trojnásobek požadavků na WAF, který nás
+    právě odmítl, je nejjistější způsob, jak si blokaci potvrdit natrvalo.
+    """
+
+
 class Http:
     def __init__(self, user_agent: str, timeout_s: int = 25, retries: int = 3) -> None:
         self.timeout_s = timeout_s
@@ -33,8 +41,11 @@ class Http:
                 resp = self.session.get(url, timeout=self.timeout_s, **kwargs)
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise requests.HTTPError(f"HTTP {resp.status_code}")
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    raise TrvaleOdmitnuto(_describe_error(resp))
                 return resp
+            except TrvaleOdmitnuto:
+                raise
             except Exception as exc:  # noqa: BLE001 — retry na cokoliv síťového
                 last_exc = exc
                 if attempt < self.retries - 1:
@@ -45,6 +56,19 @@ class Http:
         # stringem, takže klíč předaný parametrem by skončil v logu. Stejný
         # důvod jako v `_describe_error`.
         raise RuntimeError(f"Nepodařilo se stáhnout {url}: {_bez_query(last_exc)}")
+
+    def probe(self, url: str, **kwargs) -> int:
+        """Stavový kód bez výjimky a bez opakování.
+
+        Na rozdíl od `get` nejde o obsah, ale o to, jestli adresa vůbec žije —
+        `404` je tady platná odpověď, ne porucha. Používá to `wizzair._preladit`
+        k oťukání verze API.
+        """
+        try:
+            return self.session.get(url, timeout=self.timeout_s, **kwargs).status_code
+        except Exception as exc:  # noqa: BLE001 — nedostupnost je taky odpověď
+            log.debug("%s neodpovědělo: %s", url, _bez_query(exc))
+            return 0
 
     def get_json(self, url: str, **kwargs) -> dict:
         return self.get(url, **kwargs).json()

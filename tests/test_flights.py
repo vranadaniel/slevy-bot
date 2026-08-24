@@ -5,6 +5,8 @@ i to, jestli ceník pořád dává smysl. Titulky jsou skutečné, stažené ze 
 27. 7. 2026.
 """
 
+import types
+
 import pytest
 
 from src.config import load_config
@@ -406,7 +408,114 @@ class TestWizzAirSource:
             def get_json(self, *a, **kw):
                 raise RuntimeError("mapa nedostupná")
 
+            def probe(self, *a, **kw):
+                return 404
+
         assert WizzAirSource(Broken(), self.FakeFx(), load_config()).fetch() == []
+
+
+class TestWizzAirVerze:
+    """Zastaralá verze v cestě je tichá smrt celého zdroje.
+
+    Stalo se to živě 24. 8. 2026: v konstantě bylo 29.8.0, `be.wizzair.com`
+    na tu cestu vrací 404 a Wizz Air přestal dodávat cokoliv. V logu přitom
+    stál jediný řádek o mapě linek — vypadalo to na prázdný zdroj, ne na
+    poruchu.
+    """
+
+    ZIVA = "29.16.0"
+
+    class VerzovanyHttp:
+        """Živá je jedna jediná verze, na ostatní API odpovídá 404."""
+
+        def __init__(self, ziva, web=None):
+            self.ziva = ziva
+            self.web = web          # None = web se nenačte (na serveru 405)
+            self.session = None
+            self.probnuto: list[str] = []
+            self.stazenych_webu = 0
+
+        def get(self, url, **kw):
+            if self.web is None:
+                raise RuntimeError("405 Not Allowed")
+            self.stazenych_webu += 1
+            return types.SimpleNamespace(
+                text=f'src="https://be.wizzair.com/{self.web}/vendor.js"')
+
+        def get_json(self, url, **kw):
+            if f"/{self.ziva}/" not in url:
+                raise RuntimeError("404 Not Found")
+            return {"cities": [{"iata": "PRG", "connections": [{"iata": "LTN"}]}]}
+
+        def probe(self, url, **kw):
+            self.probnuto.append(url)
+            # 405 = cesta žije, jen GET není správná metoda.
+            return 405 if f"/{self.ziva}/" in url else 404
+
+        def post_json(self, url, payload, headers=None, timeout_s=None):
+            return {"outboundFlights": [{"date": "2026-09-12",
+                                         "price": {"amount": 700.0,
+                                                   "currencyCode": "CZK"}}]}
+
+    def _source(self, http, store=None):
+        from src.sources.wizzair import WizzAirSource
+
+        cfg = load_config()
+        cfg.raw["sources"]["wizzair"]["delay_s"] = 0
+        return WizzAirSource(http, TestWizzAirSource.FakeFx(), cfg, store)
+
+    def test_stale_version_is_found_by_probing(self, tmp_path):
+        """Web se z ostrého serveru načíst nemusí, `be.wizzair.com` ano."""
+        from src.store import Store
+
+        store = Store(tmp_path / "w.db")
+        http = self.VerzovanyHttp(self.ZIVA)
+        offers = self._source(http, store).fetch()
+        verze = store.get_meta("wizzair:verze")
+        store.close()
+
+        assert offers, "po přeladění musí zdroj zase dodávat"
+        assert verze == self.ZIVA, "nalezená verze se musí zapamatovat"
+        assert http.probnuto, "bez oťukání se to najít nedá"
+
+    def test_remembered_version_costs_nothing(self, tmp_path):
+        """Web má dva megabajty. Při běhu každých deset minut je to čtvrt
+        gigabajtu denně jen kvůli jednomu číslu."""
+        from src.store import Store
+
+        store = Store(tmp_path / "w.db")
+        store.set_meta("wizzair:verze", self.ZIVA)
+        http = self.VerzovanyHttp(self.ZIVA, web=self.ZIVA)
+        assert self._source(http, store).fetch()
+        store.close()
+
+        assert http.stazenych_webu == 0
+        assert http.probnuto == [], "zapamatovaná verze funguje, není co ladit"
+
+    def test_probing_is_throttled(self, tmp_path):
+        """Oťukávat při každém běhu by z výpadku udělalo palbu."""
+        from src.store import Store
+
+        store = Store(tmp_path / "w.db")
+        prvni = self.VerzovanyHttp("99.0.0")     # živá verze mimo dosah
+        self._source(prvni, store).fetch()
+        druhy = self.VerzovanyHttp("99.0.0")
+        self._source(druhy, store).fetch()
+        store.close()
+
+        assert prvni.probnuto, "poprvé se to zkusit musí"
+        assert druhy.probnuto == [], "podruhé hned za sebou už ne"
+
+    def test_versions_are_compared_numerically(self):
+        """Textově je „29.9.0" větší než „29.13.0"."""
+        http = self.VerzovanyHttp(self.ZIVA)
+        http.web = "29.9.0"
+        source = self._source(http)
+        http.get = lambda url, **kw: types.SimpleNamespace(
+            text='"https://be.wizzair.com/29.9.0/a.js" '
+                 '"https://be.wizzair.com/29.13.0/b.js"')
+
+        assert source._z_webu() == "29.13.0"
 
 
 class TestWizzAirOkno:

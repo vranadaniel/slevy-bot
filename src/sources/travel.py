@@ -106,7 +106,9 @@ class TravelSource:
         až s další změnou feedu. U zdroje, který přispívá každou půlhodinu, je
         to zdržení v řádu minut.
         """
-        headers = {}
+        # Prohlížeč o RSS říká, co čeká; `requests` posílá holé `*/*`, což je
+        # u WAF nad WordPressem jeden ze signálů „tohle je bot".
+        headers = {"Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8"}
         if self.store is not None:
             for header, key in (("If-None-Match", "etag"),
                                 ("If-Modified-Since", "modified")):
@@ -114,7 +116,7 @@ class TravelSource:
                 if cached:
                     headers[header] = cached
 
-        resp = self.http.get(url, headers=headers) if headers else self.http.get(url)
+        resp = self.http.get(url, headers=headers)
         if resp.status_code == 304:
             log.debug("%s: %s beze změny", self.name, url)
             return None

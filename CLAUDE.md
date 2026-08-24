@@ -235,6 +235,19 @@ Viz `_retry_later` v `main.py`. Zápis by ji umlčel natrvalo, přestože hodnot
 mohla přijít příští běh (vyčerpaný denní strop AI, výpadek API). Nekonečné to
 není: položka za pár dní vypadne z RSS.
 
+**Odpověď 4xx se neopakuje.** `Http.get` zkouší znovu jen `429` a `5xx` — tedy
+„teď ne". `403` a `404` znamenají „ne" a trojnásobek požadavků na WAF, který
+nás právě odmítl, je nejjistější způsob, jak si blokaci potvrdit natrvalo.
+Slouží k tomu `TrvaleOdmitnuto`. Vedle toho existuje `Http.probe`: vrátí
+stavový kód a nevyhodí výjimku, protože při oťukávání verze Wizz Airu je `404`
+platná odpověď, ne porucha.
+
+**Feedy si říkají o RSS hlavičkou `Accept`.** `requests` posílá holé `*/*`,
+což je u WAF nad WordPressem jeden ze signálů „tohle je bot". Adresy feedů se
+zároveň píšou v kanonickém tvaru — `travelfree.info` bez `www.`, protože `www.`
+je jen přesměrování a každý přeskok navíc je požadavek, o který si říkat
+nemusíme.
+
 **ETag se ukládá až po úspěšném parsování.** V `travel._load` je pořadí
 podstatné: kdyby server vrátil 200 s rozbitým tělem a my si značku uložili,
 příští běh pošle `If-None-Match`, dostane 304 a ten feed **zmlkne natrvalo**,
@@ -505,8 +518,20 @@ to nefunguje a na které se přijde jen měřením:
   jinak vrátí `InvalidProtocol`. Bez toho projde z celé dávky **jen první
   trasa** a zbytek tiše propadne — chyba, která se tváří jako prázdný zdroj.
 * `dayInterval` musí být **aspoň 3**, jinak validace odmítne dotaz.
-* Verze API je v cestě (`be.wizzair.com/29.8.0/…`) a zvedá se; zjišťuje se
-  z jejich webu, ne z konfigurace.
+* **Verze je v cestě** (`be.wizzair.com/29.13.0/…`) a zvedá se. Zastaralá
+  znamená `404` na všechno, takže zdroj zmlkne úplně — v logu zůstane jediný
+  řádek o mapě linek a vypadá to na prázdný zdroj, ne na poruchu. Přesně tak
+  Wizz Air vypadl 24. 8. 2026: v konstantě bylo 29.8.0.
+
+Verze se proto zjišťuje ve třech krocích (`verze`, `_preladit`): zapamatovaná
+hodnota z `meta`, číslo vyčtené z jejich webu, a nakonec **oťukání
+`be.wizzair.com`**. Ten třetí krok je tam proto, že web se z ostrého serveru
+načíst nemusí — `www.wizzair.com` odtamtud vrací `405` — kdežto `be.wizzair.com`
+odpovídá normálně. Oťukává se přes `Api/asset/farechart`: GET na živou verzi
+vrátí `405` a 82 bajtů, na mrtvou `404`; mapa by stála 666 kB na pokus.
+Zapamatování je zároveň úspora — web má dva megabajty a stahovat ho každých
+deset minut kvůli jednomu číslu je čtvrt gigabajtu denně. Oťukávání se pouští
+nejvýš jednou za šest hodin, jinak by z výpadku byla palba.
 
 Trasy se mezi běhy **střídají** (`routes_per_run`). Zeptat se na všech 58
 každých deset minut by bylo přes osm tisíc požadavků denně.

@@ -192,11 +192,14 @@ sources:
         # celé" — tagové feedy podchytí i to, co už z hlavního proudu vypadlo.
         # Tagy `bratislava` a `brno` existují, ale poslední příspěvek je z října
         # 2025, resp. 2019; Bratislavu stejně zachytí hlavní feed.
+        # Adresy jsou schválně BEZ `www.` — to je jen přesměrování (301) na
+        # tenhle tvar a každý přeskok je požadavek navíc, o který si u WAF
+        # říkat nemusíme.
         credibility: 0.85
         feeds:
-          - {url: "https://www.travelfree.info/feed/"}
-          - {url: "https://www.travelfree.info/tag/prague/feed/", airport: PRG}
-          - {url: "https://www.travelfree.info/tag/vienna/feed/", airport: VIE}
+          - {url: "https://travelfree.info/feed/"}
+          - {url: "https://travelfree.info/tag/prague/feed/", airport: PRG}
+          - {url: "https://travelfree.info/tag/vienna/feed/", airport: VIE}
 
       - name: fly4free
         credibility: 0.8

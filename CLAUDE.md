@@ -185,6 +185,27 @@ pobyt na Korfu za 313° nemohl projít nikdy. `thresholds.by_category` proto nes
 i tyhle klíče přes YAML kotvu a test `test_travel_vocabulary_does_not_drift`
 hlídá, že se oba seznamy nerozejdou.
 
+**Cizí uzel projde jen u dálkového cíle.** Doletět do Dublinu za osm stovek
+a ušetřit deset tisíc na Ameriku dává smysl; jet do Frankfurtu kvůli Malaze ne.
+`sources.travel.hub_airports` proto pouští nabídky z patnácti evropských uzlů,
+ale `main.drop_pointless_hubs` je zahodí, pokud `typical_czk` regionu cíle
+nedosáhne `hub_min_typical_czk` (12 000 Kč). Rozhoduje ceník, ne další ruční
+seznam — data se dělí sama: dálkové regiony mají 12 000 a výš, celá Evropa
+2 500–4 500 a Blízký východ 5 500. Nerozpoznaný cíl se zahodí; u cizího odletu
+má nabídka důkazní břemeno navíc. Změřeno na živých feedech: prošlo 18 nabídek
+(Dublin–Toronto za 2 316 Kč, Dublin–USA za 2 533 Kč), zahodily se čtyři
+evropské skoky typu Berlín–Madeira.
+
+**Název uzlu je zároveň místem v ceníku.** „from Dublin to New York" tedy
+matchne Dublin i New York; vyhrává dražší region (viz níž), takže cíl přebije
+odletové město. U nerozpoznaného cíle zbude region uzlu, a protože všechny uzly
+jsou evropské, položka správně propadne prahem.
+
+**Obecné „USA" míří na východní pobřeží, ne na západní.** Původně to měly oba
+regiony a při řazení podle ceny sestupně vyhrával západ za 18 000 Kč — běžná
+letenka do New Yorku tím vypadala jako trhák. Levnější strana je bezpečnější:
+podstřelená hodnota mlčí, přestřelená posílá falešné poplachy.
+
 **`FlightOracle` oceňuje jen `category == "flight"`.** Zájezd má v ceně
 i ubytování a stravu, takže cena letenky o něm nevypovídá. Ten ať ocení AI
 soudce, nebo zůstane neoceněný.

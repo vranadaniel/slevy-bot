@@ -73,6 +73,9 @@ class FlightOracle:
             # ne jednotný práh ve `score.py`.
             offer.extra["instant_below_czk"] = float(great)
         offer.extra["flight_region"] = region["name"]
+        # Typickou cenu regionu potřebuje `main.drop_pointless_hubs`, aby
+        # poznal dálkovou trasu od evropské, aniž by měl vlastní seznam.
+        offer.extra["flight_typical_czk"] = typical
 
         return Value(
             real_value_czk=typical,

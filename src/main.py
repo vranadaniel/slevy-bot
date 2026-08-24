@@ -183,6 +183,11 @@ def run_scan(cfg, args) -> int:
     if args.explain:
         return explain(verdicts, args.explain, itad)
 
+    # Cizí uzly (Dublin, Frankfurt) mají smysl jen u dálkových tras. Musí to
+    # proběhnout až po AI — region se rozpozná při oceňování.
+    verdicts = drop_pointless_hubs(
+        verdicts, float(cfg.get("sources.travel.hub_min_typical_czk", 0)))
+
     instant = [v for v in verdicts if v.level == INSTANT]
     digest = [v for v in verdicts if v.level == DIGEST]
     instant.sort(key=lambda v: v.value_ratio or 1.0)
@@ -325,6 +330,44 @@ def drop_unpopular(digest: list, min_popularity: float,
     if nezajimave or nezname:
         log.info("Ze souhrnu vypadlo %s neatraktivních her a %s s neznámou "
                  "popularitou", nezajimave, nezname)
+    return kept
+
+
+def drop_pointless_hubs(verdicts: list, min_typical_czk: float) -> list:
+    """Zahodí nabídky z cizího uzlu, u kterých se ta cesta nevyplatí.
+
+    Doletět do Dublinu za osm stovek a ušetřit deset tisíc na Ameriku dává
+    smysl. Jet do Frankfurtu kvůli Malaze ne — na cestě do uzlu bys utratil
+    víc, než ušetříš. Nabídka z cizího letiště proto projde jen u dálkového
+    cíle.
+
+    Rozhoduje `typical_czk` regionu z `flights.yaml`, který tam už je; žádný
+    další ruční seznam. Data se dělí sama: dálkové regiony mají 12 000 Kč
+    a výš, celá Evropa 2 500-4 500 a Blízký východ 5 500.
+
+    Když region nerozpoznáme, položka se zahodí. U cizího odletu je mlčení
+    správná odpověď — nevíme, jestli se ta cesta vyplatí, a nabídka z Frankfurtu
+    má proti nabídce z Prahy důkazní břemeno navíc.
+    """
+    if min_typical_czk <= 0:
+        return verdicts
+
+    kept, dropped = [], 0
+    for verdict in verdicts:
+        hub = verdict.offer.extra.get("hub_departure")
+        if not hub:
+            kept.append(verdict)
+            continue
+
+        typical = verdict.offer.extra.get("flight_typical_czk") or 0
+        if typical >= min_typical_czk:
+            kept.append(verdict)
+        else:
+            dropped += 1
+
+    if dropped:
+        log.info("Zahozeno %s nabídek z cizích uzlů, kde se cesta nevyplatí",
+                 dropped)
     return kept
 
 

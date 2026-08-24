@@ -1008,6 +1008,15 @@ regions:
       - niagara
       - východní pobřeží usa
       - east coast usa
+      # Obecné „USA" bez upřesnění pobřeží. Míří sem, a ne na západ, schválně:
+      # nižší typická cena spíš podstřelí hodnotu, než aby vyrobila falešný
+      # trhák. Vodicí mezera brání shodě uvnitř slova; `u s cities` je složená
+      # podoba „U.S. cities" po odstranění interpunkce (viz `text.fold`).
+      - ' usa'
+      - united states
+      - u s cities
+      - us cities
+      - the usa
 
   - name: severni-amerika-zapad
     label: "Severní Amerika – západní pobřeží, Aljaška, Havaj a západní Kanada"
@@ -1061,8 +1070,6 @@ regions:
       - west coast usa
       - california
       - kaliforni
-      - united states
-      - the usa
       - spojené státy
 
   - name: karibik-stredni-amerika

@@ -135,6 +135,38 @@ sources:
       - {code: VIE, terms: [vienna, wien, vídeň, vídn, viedeň, viedn]}
       - {code: BTS, terms: [bratislav]}
 
+    # --- CIZÍ UZLY ---
+    # Doletět do Dublinu za osm stovek a ušetřit deset tisíc na Ameriku dává
+    # smysl. Jet do Frankfurtu kvůli Malaze ne — na cestě do uzlu bys utratil
+    # víc, než ušetříš. Nabídka z cizího letiště proto projde JEN u dálkového
+    # cíle; u evropského se zahodí.
+    #
+    # Rozhoduje `typical_czk` regionu z `flights.yaml`, ne další ruční seznam.
+    # Data se dělí sama: dálkové regiony mají 12 000 Kč a výš (Oceánie 29 000,
+    # Jižní Amerika 22 000, Asie 16-17 000, východ USA 12 000), kdežto Blízký
+    # východ 5 500 a celá Evropa 2 500-4 500. Práh 12 000 tedy pustí zaoceánské
+    # a asijské lety a zavře evropské.
+    #
+    # Když region nerozpoznáme, položka se zahodí — u cizího odletu je mlčení
+    # správná odpověď, protože nevíme, jestli se ta cesta vyplatí.
+    hub_min_typical_czk: 12000
+    hub_airports:
+      - {code: DUB, terms: [dublin]}
+      - {code: FRA, terms: [frankfurt]}
+      - {code: MUC, terms: [munich, mnichov]}
+      - {code: BER, terms: [berlin, berlín]}
+      - {code: WAW, terms: [warsaw, warszaw, varšav, varsav]}
+      - {code: LON, terms: [london, londýn, londyn]}
+      - {code: AMS, terms: [amsterdam]}
+      - {code: PAR, terms: [paris, paříž, pariz]}
+      - {code: BRU, terms: [brussels, brusel]}
+      - {code: ZRH, terms: [zurich, curych]}
+      - {code: CPH, terms: [copenhagen, kodaň, kodan]}
+      - {code: MAD, terms: [madrid]}
+      - {code: BCN, terms: [barcelon]}
+      - {code: LIS, terms: [lisbon, lisabon]}
+      - {code: BUD, terms: [budapest, budapešť, budapest]}
+
     sites:
       - name: cestujlevne
         # Nejbližší zdroj tomu, co chceš: česky, ceny v korunách a odlety

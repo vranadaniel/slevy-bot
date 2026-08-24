@@ -171,13 +171,39 @@ class TestTravelParser:
         assert offers[0].extra["airport"] == "VIE"
         assert offers[0].price_czk == pytest.approx(497 * 25.0)
 
-    def test_drops_airports_we_do_not_fly_from(self):
-        """Německá a polská letiště jsou ze zadání vynechaná."""
+    def test_unknown_foreign_airport_is_dropped(self):
+        """Letiště, které není ani domácí, ani v seznamu uzlů."""
+        xml = _fly_feed([{
+            "title": "Flights from Stuttgart to Sri Lanka from €470",
+            "guid": "str-1", "categories": ["europe", "cheap flights from stuttgart"],
+        }])
+        assert _fly_source(xml).fetch() == []
+
+    def test_hub_departure_is_kept_but_marked(self):
+        """Mnichov je uzel: parser položku pustí a označí ji.
+
+        O tom, jestli se ta cesta vyplatí, rozhodne až
+        `main.drop_pointless_hubs` podle regionu cíle.
+        """
         xml = _fly_feed([{
             "title": "Flights from Munich to Sri Lanka from €470",
             "guid": "muc-1", "categories": ["europe", "cheap flights from munich"],
         }])
-        assert _fly_source(xml).fetch() == []
+        offers = _fly_source(xml).fetch()
+
+        assert len(offers) == 1
+        assert offers[0].extra["hub_departure"] == "MUC"
+        assert offers[0].extra["airport"] == "MUC"
+
+    def test_home_airport_is_not_marked_as_a_hub(self):
+        xml = _fly_feed([{
+            "title": "Flights from Prague to Sri Lanka from €470",
+            "guid": "prg-1", "categories": ["cheap flights from prague"],
+        }])
+        offers = _fly_source(xml).fetch()
+
+        assert offers[0].extra["hub_departure"] is None
+        assert offers[0].extra["airport"] == "PRG"
 
     def test_drops_stale_items(self):
         """Error-fare feedy jsou z velké části archiv z let 2020–2021."""

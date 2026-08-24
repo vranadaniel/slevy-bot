@@ -55,6 +55,36 @@ class TestRegionMatching:
         oracle.value_of(offer)
         assert offer.extra["flight_region"] == "asie-jihovychodni"
 
+    @pytest.mark.parametrize("name", [
+        "CRAZY! Cheap flights from Dublin to the U.S. cities from €99",
+        "CRAZY HOT Cheap non-stop flights from Dublin to major US cities €150",
+        "Flights from Vienna to the United States from €299",
+    ])
+    def test_generic_usa_is_recognised(self, oracle, name):
+        """Cenik znal jen „east coast usa". Zaoceansky trhak z Dublinu se pak
+        chytil na region odletoveho mesta (zapadni Evropa) a zahodil se."""
+        offer = _flight(name)
+        assert oracle.value_of(offer) is not None
+        assert offer.extra["flight_region"] == "severni-amerika-vychod"
+
+    def test_generic_usa_lands_on_the_cheaper_coast(self, oracle):
+        """Obecne „USA" melo puvodne oba regiony a vyhraval zapad za 18 000 Kc,
+        protoze se radi podle ceny sestupne. Vychodni pobrezi se tim precenovalo
+        o polovinu a bezna letenka do New Yorku vypadala jako trhak."""
+        offer = _flight("Flights from Vienna to the USA from €299")
+        oracle.value_of(offer)
+        assert offer.extra["flight_region"] == "severni-amerika-vychod"
+
+    def test_west_coast_is_still_its_own_region(self, oracle):
+        offer = _flight("Flights from Prague to west coast USA from €499")
+        oracle.value_of(offer)
+        assert offer.extra["flight_region"] == "severni-amerika-zapad"
+
+    def test_usa_does_not_match_inside_a_word(self, oracle):
+        """Vodici mezera u ' usa' brani shode uvnitr slova."""
+        offer = _flight("Flights from Prague to Ausable Forks for €99")
+        assert offer.extra.get("flight_region") != "severni-amerika-vychod"
+
     def test_unknown_destination_is_not_guessed(self, oracle):
         assert oracle.value_of(_flight("Flights to Nowhereland for €100")) is None
 
@@ -550,3 +580,75 @@ class TestChybovaHlaskaNeprozradiKlic:
         assert "tajne" not in text
         assert "origin" not in text
         assert "https://api.example.com/v3/x?…" in text
+
+
+class TestCiziUzly:
+    """Dublin ano u Ameriky, Frankfurt ne u Malagy.
+
+    Rozhoduje `typical_czk` regionu z ostrého `flights.yaml`, ne dalsi rucni
+    seznam. Data se deli sama: dalkove regiony maji 12 000 Kc a vys, cela
+    Evropa 2 500-4 500.
+    """
+
+    def _verdict(self, nazev, hub=None, price_czk=5_000.0):
+        from src.score import DIGEST, Verdict
+
+        extra = {"airport": hub or "PRG", "hub_departure": hub}
+        offer = _flight(nazev, price_czk=price_czk, **extra)
+        oracle = FlightOracle(load_config().flights)
+        oracle.value_of(offer)
+        return Verdict(offer=offer, level=DIGEST)
+
+    def _prah(self):
+        return float(load_config().get("sources.travel.hub_min_typical_czk"))
+
+    def test_long_haul_from_a_hub_survives(self):
+        """Presne ten pripad, kvuli kteremu to vzniklo: zaoceansky let z uzlu."""
+        from src.main import drop_pointless_hubs
+
+        v = self._verdict("Cheap flights from Dublin to NEW YORK, USA from €75",
+                          hub="DUB")
+        assert v.offer.extra["flight_typical_czk"] >= self._prah()
+        assert drop_pointless_hubs([v], self._prah()) == [v]
+
+    def test_european_hop_from_a_hub_is_dropped(self):
+        """Do Frankfurtu bys utratil vic, nez usetris."""
+        from src.main import drop_pointless_hubs
+
+        v = self._verdict("Flights from Frankfurt to Malaga, Spain from €29",
+                          hub="FRA")
+        assert drop_pointless_hubs([v], self._prah()) == []
+
+    def test_unknown_destination_from_a_hub_is_dropped(self):
+        """U ciziho odletu je mlceni spravna odpoved.
+
+        Nazev uzlu je zaroven mistem v ceniku, takze neznamy cil spadne na
+        region odletoveho mesta - a vsechny uzly jsou evropske. Vyjde to tedy
+        pod prah, coz je spravny vysledek: nevime, jestli se ta cesta vyplati,
+        a nabidka z Frankfurtu ma proti nabidce z Prahy dukazni bremeno navic.
+        """
+        from src.main import drop_pointless_hubs
+
+        v = self._verdict("Flights from Dublin to Nowhereland for €100", hub="DUB")
+        assert v.offer.extra["flight_typical_czk"] < self._prah()
+        assert drop_pointless_hubs([v], self._prah()) == []
+
+    def test_destination_beats_the_hub_city(self):
+        """Dublin je sam v ceniku jako zapadni Evropa. Kdyby vyhral nad cilem,
+        zaoceanske lety z uzlu by se zahazovaly vsechny."""
+        v = self._verdict("Cheap flights from Dublin to NEW YORK, USA from €75",
+                          hub="DUB")
+        assert v.offer.extra["flight_region"] == "severni-amerika-vychod"
+
+    def test_home_airport_is_never_touched(self):
+        """Z Prahy chceme i kratke evropske lety - tam se nikam necestuje."""
+        from src.main import drop_pointless_hubs
+
+        v = self._verdict("Malta z Bratislavy na podzim. Letenky od 920 Kč")
+        assert drop_pointless_hubs([v], self._prah()) == [v]
+
+    def test_zero_threshold_disables_the_rule(self):
+        from src.main import drop_pointless_hubs
+
+        v = self._verdict("Flights from Frankfurt to Malaga from €29", hub="FRA")
+        assert drop_pointless_hubs([v], 0) == [v]

@@ -65,6 +65,9 @@ class TravelSource:
         self.max_age_days = int(cfg.get("sources.travel.max_age_days", 7))
         self.delay_s = float(cfg.get("sources.travel.delay_s", 0.5))
         self.airports: list[dict] = cfg.get("sources.travel.airports", []) or []
+        # Cizí uzly (Dublin, Frankfurt…). Projdou jen u dálkových cílů,
+        # o čemž rozhoduje až `main.drop_pointless_hubs` podle ceníku.
+        self.hubs: list[dict] = cfg.get("sources.travel.hub_airports", []) or []
 
     def fetch(self) -> list[Offer]:
         offers: dict[str, Offer] = {}
@@ -145,10 +148,18 @@ class TravelSource:
         region = _region(item)
 
         airport = feed.get("airport") or self._match_airport(text)
+        hub = None
         if airport is None:
-            if not (is_error_fare and "europe" in text):
+            # Odlet z domácího letiště nenalezen. Zkusíme cizí uzel — ten se
+            # ale vyplatí jen u dálkové trasy, takže se položka označí
+            # a rozhodne se o ní až podle rozpoznaného regionu.
+            hub = self._match_airport(text, self.hubs)
+            if hub is not None:
+                airport = hub
+            elif is_error_fare and "europe" in text:
+                airport = "EU"
+            else:
                 return None
-            airport = "EU"
 
         parsed = money.parse_price(title, self.currency)
         if parsed is None:
@@ -172,6 +183,9 @@ class TravelSource:
             credibility=ERROR_FARE_CREDIBILITY if is_error_fare else self.credibility,
             extra={
                 "airport": airport,
+                # Nese kód uzlu, ne jen True — ať je ve zprávě vidět,
+                # odkud se vlastně letí.
+                "hub_departure": hub,
                 "error_fare": is_error_fare,
                 "categories": categories[:8],
                 # Světadíl přímo z feedu. Kde ho zdroj uvádí, nemusí se hádat
@@ -192,14 +206,14 @@ class TravelSource:
         age = dt.datetime.now(dt.timezone.utc) - published
         return age.days <= self.max_age_days
 
-    def _match_airport(self, raw: str) -> str | None:
+    def _match_airport(self, raw: str, kde: list[dict] | None = None) -> str | None:
         """Odletové letiště z názvu a kategorií.
 
         Bez diakritiky — české zdroje píšou „z Vídně", konfigurace „vídeň",
         a někdy se totéž město objeví i bez háčků. Viz `text.fold`.
         """
         text = haystack(raw)
-        for entry in self.airports:
+        for entry in (self.airports if kde is None else kde):
             for term in entry.get("terms", []):
                 if fold_term(term) in text:
                     return entry["code"]

@@ -188,6 +188,11 @@ def run_scan(cfg, args) -> int:
     verdicts = drop_pointless_hubs(
         verdicts, float(cfg.get("sources.travel.hub_min_typical_czk", 0)))
 
+    # Drobnosti za pár korun mají díky poměru systémovou výhodu nad velkými
+    # hrami. Musí to proběhnout před rozdělením, ať se to týká i upozornění.
+    verdicts = drop_cheap_games(
+        verdicts, float(cfg.get("games.min_value_czk", 0)))
+
     instant = [v for v in verdicts if v.level == INSTANT]
     digest = [v for v in verdicts if v.level == DIGEST]
     instant.sort(key=lambda v: v.value_ratio or 1.0)
@@ -333,6 +338,41 @@ def drop_unpopular(digest: list, min_popularity: float,
     return kept
 
 
+def drop_cheap_games(verdicts: list, min_value_czk: float) -> list:
+    """Zahodí hry, které nestojí za řeč ani v plné ceně.
+
+    O úrovni rozhoduje POMĚR ceny k hodnotě, a ten levné hry systémově
+    zvýhodňuje: hra za 3 Kč z původních 100 vyjde na 3 %, kdežto AAA za 200 Kč
+    z patnácti stovek na 13 %. Souhrn se tím plnil drobnostmi, o které nikdo
+    nestojí, a velký titul v obrovské slevě mezi nimi zapadl.
+
+    Popularita to nevyřeší — ta měří, jestli hru někdo hrál, ne jestli je to
+    velký titul. Povedená indie hra má hodnocení jako AAA. Rozhodnout musí
+    **ceníková cena**: pod šesti stovkami velká hra prakticky není a nad nimi
+    prakticky není obskurní (změřeno na katalogu GOG, viz `config.yaml`).
+
+    Sedí to vedle `drop_unpopular` ze stejného důvodu — je to věc výběru do
+    zprávy, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.
+    """
+    if min_value_czk <= 0:
+        return verdicts
+
+    kept, levne = [], 0
+    for verdict in verdicts:
+        hodnota = verdict.value.real_value_czk if verdict.value else None
+        if (verdict.level != NONE and hodnota is not None
+                and hodnota < min_value_czk
+                and group_of(verdict.offer) == HRY):
+            levne += 1
+            continue
+        kept.append(verdict)
+
+    if levne:
+        log.info("Zahozeno %s her, které ani v plné ceně nestojí %s Kč",
+                 levne, int(min_value_czk))
+    return kept
+
+
 def drop_pointless_hubs(verdicts: list, min_typical_czk: float) -> list:
     """Zahodí nabídky z cizího uzlu, u kterých se ta cesta nevyplatí.
 
@@ -378,6 +418,9 @@ def _queue(store, verdict) -> None:
         "url": offer.url,
         "price_czk": offer.price_czk,
         "value_ratio": verdict.value_ratio,
+        # Plná cena patří do zprávy: „13 %" samo o sobě neřekne, jestli jde
+        # o velkou hru za dvě stě, nebo o drobnost za tři koruny.
+        "value_czk": verdict.value.real_value_czk if verdict.value else None,
         "group": group_of(offer),
         "popularity": offer.extra.get("popularity"),
         "reviews_score": offer.extra.get("reviews_score"),

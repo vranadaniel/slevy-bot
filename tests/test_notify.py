@@ -77,6 +77,18 @@ class TestDigest:
         assert sum(1 for line in text.split("\n")
                    if line.startswith("•") and "Hra " in line) == 8
 
+    def test_full_price_is_shown_next_to_the_ratio(self):
+        """Samotné „13 %" nerozliší velkou hru za dvě stě od drobnosti
+        za tři koruny — a přesně na to si uživatel stěžoval."""
+        text = format_digest([_item("Velká hra", HRY, ratio=0.13,
+                                    popularity=0.9, value_czk=1490.0)])
+
+        assert "13 % z 1 490 Kč" in text
+
+    def test_ratio_alone_survives_without_the_value(self):
+        text = format_digest([_item("Letenka", HRY, ratio=0.13)])
+        assert "13 % ceny" in text
+
     def test_games_are_ranked_by_popularity_not_by_discount(self):
         items = [
             _item("Stará šunta", HRY, ratio=0.01, popularity=0.2),

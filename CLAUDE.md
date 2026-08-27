@@ -139,9 +139,28 @@ a v `notify._rank_key` se dostanou nahoru. Řídí to
 `itad.require_known_popularity` a týká se to **jen her**; u předplatného
 a cestování se popularita nezjišťuje, takže by tentýž filtr vymazal souhrn celý.
 
+**Hru pod `games.min_value_czk` odmítá i skvělý poměr.** O úrovni rozhoduje
+poměr ceny k hodnotě, a ten drobnosti systémově zvýhodňuje: hra za 3 Kč
+z původních 100 vyjde na 3 %, kdežto AAA za 200 Kč z patnácti stovek na 13 %.
+Souhrn se tím plnil věcmi za jednotky korun a velký titul v obrovské slevě
+mezi nimi zapadl. Popularita to nespraví — ta měří, jestli hru někdo hrál, ne
+jestli je to velký titul; povedená indie hra má hodnocení jako AAA. Rozhoduje
+proto **ceníková cena**. Změřeno na katalogu GOG (12 648 her, ceny rovnou
+v korunách): hluboko v katalogu je 100 % titulů pod 600 Kč, kdežto nad tou
+hranicí leží Skyrim, System Shock nebo Silent Hill 2. Filtruje
+`drop_cheap_games` v `main.py`, a to **před rozdělením na upozornění a souhrn**
+— u her umí okamžité upozornění spustit vlastní cenová historie, takže
+filtrovat jen souhrn by nestačilo.
+
 **Popularita se nedostala do `score.py`.** Je to věc řazení a filtrování
 souhrnu, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.
-Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`.
+Filtruje `drop_unpopular` v `main.py`, řadí `_rank_key` v `notify.py`. Ze
+stejného důvodu je tam i `drop_cheap_games` — `score.py` nemá vědět, že něco
+jako hra existuje.
+
+**V souhrnu se vedle poměru píše plná cena.** „13 %" samo o sobě nerozliší
+velkou hru za dvě stě korun od drobnosti za tři, takže `notify._detail`
+vypisuje „13 % z 1 490 Kč". Fronta si proto v `_queue` nese i `value_czk`.
 
 **`INGAME_TOPUP` na Kinguinu není hra.** Navzdory názvu je to škatulka na
 předplatné: YouTube Premium, Spotify, ChatGPT i to referenční Gemini za 65 Kč.

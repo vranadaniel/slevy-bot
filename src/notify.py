@@ -264,7 +264,11 @@ def _detail(item: dict) -> list[str]:
     parts = [f"<b>{_fmt_czk(item['price_czk'])}</b>"]
     ratio = item.get("value_ratio")
     if ratio:
-        parts.append(f"{_fmt_ratio(ratio)} ceny")
+        # Plná cena vedle poměru: „13 % z 1 490 Kč" rozliší velkou hru
+        # v slevě od drobnosti za pár korun, samotné „13 % ceny" ne.
+        hodnota = item.get("value_czk")
+        parts.append(f"{_fmt_ratio(ratio)} z {_fmt_czk(hodnota)}" if hodnota
+                     else f"{_fmt_ratio(ratio)} ceny")
     score, count = item.get("reviews_score"), item.get("reviews_count")
     if score is not None and count:
         parts.append(f"★ {score} % z {_fmt_count(count)}")

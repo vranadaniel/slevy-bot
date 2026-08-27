@@ -348,3 +348,101 @@ class TestHistoricalLowGate:
 
         assert verdict.value_ratio == pytest.approx(0.2), "proti doporučené ceně 20 %"
         assert verdict.level == NONE
+
+
+class TestDropCheapGames:
+    """Poměr systémově zvýhodňuje drobnosti.
+
+    Hra za 3 Kč z původních 100 vyjde na 3 %, AAA za 200 Kč z patnácti stovek
+    na 13 %. Souhrn se tím plnil věcmi za jednotky korun, o které nikdo
+    nestojí, a velký titul v obrovské slevě mezi nimi zapadl.
+    """
+
+    def _verdict(self, hodnota, cena=200.0, uid="g", level=None, offer=None):
+        from src.oracles.base import Value
+        from src.score import DIGEST, Verdict
+
+        v = Verdict(offer=offer or _game(uid=uid, price=cena),
+                    level=level or DIGEST)
+        v.value = Value(real_value_czk=hodnota, origin="itad")
+        v.value_ratio = cena / hodnota
+        return v
+
+    def test_junk_loses_to_a_big_title(self):
+        from src.main import drop_cheap_games
+
+        drobnost = self._verdict(100.0, cena=3.0, uid="drobnost")
+        aaa = self._verdict(1500.0, cena=200.0, uid="aaa")
+
+        assert [v.offer.uid for v in drop_cheap_games([drobnost, aaa], 600.0)] \
+            == ["aaa"], "rozhoduje ceníková cena, ne poměr"
+
+    def test_popularity_would_not_have_caught_it(self):
+        """Povedená indie hra má hodnocení jako AAA — popularita měří, jestli
+        hru někdo hrál, ne jestli je to velký titul."""
+        from src.main import drop_cheap_games, drop_unpopular
+
+        indie = self._verdict(150.0, cena=4.0, uid="indie")
+        indie.offer.extra["popularity"] = 0.9
+
+        assert drop_unpopular([indie], 0.6) == [indie], "filtrem popularity projde"
+        assert drop_cheap_games([indie], 600.0) == []
+
+    def test_instant_is_filtered_too(self):
+        """Vlastní cenová historie umí u her spustit i okamžité upozornění,
+        takže samotný souhrn by nestačil."""
+        from src.main import drop_cheap_games
+        from src.score import INSTANT
+
+        drobnost = self._verdict(120.0, cena=2.0, uid="d", level=INSTANT)
+        assert drop_cheap_games([drobnost], 600.0) == []
+
+    def test_non_games_are_never_touched(self):
+        """Gemini AI Pro za 65 Kč nesmí padnout na prahu určeném hrám —
+        a stejně tak letenka, kde je hodnota v úplně jiném řádu."""
+        from src.main import drop_cheap_games
+        from src.sources.base import FEED, Offer
+
+        predplatne = self._verdict(2000.0, cena=65.0, offer=Offer(
+            source="kinguin", kind=CATALOG, uid="s", name="Gemini AI Pro",
+            price_czk=65.0, url="u", category="INGAME_TOPUP",
+            merchant="kinguin", credibility=0.9,
+            extra={"product_type": "INGAME_TOPUP"}))
+        # Levná letenka: hodnota pod prahem, ale s hrami nemá nic společného.
+        letenka = self._verdict(500.0, cena=200.0, offer=Offer(
+            source="ryanair", kind=CATALOG, uid="t", name="Letenky do Neapole",
+            price_czk=200.0, url="u", category="flight", merchant="ryanair",
+            credibility=1.0, extra={}))
+
+        kept = drop_cheap_games([predplatne, letenka], 600.0)
+        assert [v.offer.uid for v in kept] == ["s", "t"]
+
+    def test_unvalued_item_is_kept(self):
+        """Neoceněná položka práh neminula — nikdo jí neurčil hodnotu."""
+        from src.main import drop_cheap_games
+        from src.score import NONE, Verdict
+
+        neocenena = Verdict(offer=_game(uid="n"), level=NONE)
+        assert drop_cheap_games([neocenena], 600.0) == [neocenena]
+
+    def test_zero_disables_the_filter(self):
+        from src.main import drop_cheap_games
+
+        drobnost = self._verdict(100.0, cena=3.0)
+        assert drop_cheap_games([drobnost], 0.0) == [drobnost]
+
+    def test_live_config_keeps_the_reference_case(self):
+        """Ostrá konfigurace nesmí umlčet Gemini AI Pro za 65 Kč."""
+        from src.config import load_config
+        from src.main import drop_cheap_games
+        from src.sources.base import Offer
+
+        prah = float(load_config().get("games.min_value_czk", 0))
+        gemini = self._verdict(2000.0, cena=65.0, offer=Offer(
+            source="kinguin", kind=CATALOG, uid="s", name="Gemini AI Pro",
+            price_czk=65.0, url="u", category="INGAME_TOPUP",
+            merchant="kinguin", credibility=0.9,
+            extra={"product_type": "INGAME_TOPUP"}))
+
+        assert prah > 0, "filtr má být v ostré konfiguraci zapnutý"
+        assert drop_cheap_games([gemini], prah) == [gemini]

@@ -314,6 +314,27 @@ itad:
   # Týká se JEN her; u předplatného a cestování se popularita nezjišťuje.
   require_known_popularity: true
 
+games:
+  # Kolik musí hra stát v PLNÉ ceně, aby vůbec stála za zprávu.
+  #
+  # Popularita říká, jestli hru někdo hrál, ne jestli je to velký titul —
+  # povedená indie hra má hodnocení jako AAA. A protože se o úrovni rozhoduje
+  # POMĚREM, mají levné hry systémovou výhodu: hra za 3 Kč z původních 100 má
+  # extrémnější poměr než AAA za 200 Kč z 1 500. Sekce se tím plnila drobnostmi
+  # za jednotky korun, zatímco velká hra v obrovské slevě zapadla.
+  #
+  # Rozhoduje proto ceníková cena, ne prodejní. Změřeno na katalogu GOG
+  # (12 648 her, ceny rovnou v korunách, `price.base` je skutečná cena obchodu):
+  #   * hluboko v katalogu, tedy obskurní tituly: 89 % pod 300 Kč, 100 % pod 600
+  #   * mezi žádanými: pod 600 Kč zůstane 88 % a nad ní vyjdou Skyrim,
+  #     System Shock, Silent Hill 2, Vampyr — přesně ta liga, o kterou jde
+  # Šest set korun je tedy hranice, pod kterou velká hra prakticky nespadne
+  # a obskurní se nad ni prakticky nedostane.
+  #
+  # Když bude sekce s hrami chodit prázdná, sniž na 400. Nula filtr vypne.
+  # Týká se JEN her — předplatné ani cestování se tím neřídí.
+  min_value_czk: 600
+
 judge:
   enabled: true
   base_url: "https://openrouter.ai/api/v1/chat/completions"

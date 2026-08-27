@@ -275,3 +275,51 @@ class TestEtagAzPoParsovani:
 
         assert s.get_meta("feed:etag:http://x/feed") is None
         s.close()
+
+
+class TestRozptylPodMedian:
+    """Kde vlastně leží dosažitelné minimum.
+
+    Práh „30 % pod vlastním mediánem" je odhad, dokud se nezměří, jak hluboko
+    se položky doopravdy dostanou. U katalogového cestování je to podstatné:
+    neměří se tam cena letenky, ale nejlevnější nabídka na trase — a ta je
+    z podstaty blízko dna, takže se hýbe míň než cena konkrétního termínu.
+    """
+
+    def _historie(self, store, body):
+        """`body` je [(cena, kolik dní zpátky)] — pořadí od nejstaršího.
+
+        Časy se musí zadat ručně: `price_profile` váží cenu dobou, po kterou
+        platila, takže na rozestupech tady záleží.
+        """
+        for cena, _ in body:
+            store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", cena)
+        radky = store.conn.execute(
+            "SELECT rowid FROM price_log ORDER BY rowid").fetchall()
+        assert len(radky) == len(body), "do price_log jdou jen ZMĚNY ceny"
+        for radek, (_, zpet) in zip(radky, body):
+            ts = (dt.datetime.now(dt.timezone.utc)
+                  - dt.timedelta(days=zpet)).isoformat()
+            store.conn.execute("UPDATE price_log SET ts = ? WHERE rowid = ?",
+                               (ts, radek["rowid"]))
+
+    def test_ratio_is_minimum_over_own_median(self, store):
+        """Tisícovka platila devět dní, pětistovka jeden — běžná cena je tedy
+        tisíc a dosažitelné minimum je půlka."""
+        self._historie(store, [(1000.0, 10), (500.0, 1)])
+        pomery = store.stats_price_spread()
+
+        assert len(pomery["ryanair"]) == 1
+        assert pomery["ryanair"][0] == pytest.approx(0.5, abs=0.01)
+
+    def test_immature_item_is_not_counted(self, store):
+        """Stejná mez jako u `HistoryOracle` — jinak by to číslo nešlo
+        porovnat s tím, co bot doopravdy počítá."""
+        store.record_price("ryanair", "PRG-BGY", "Letenky", "u", "flight", 900.0)
+        assert store.stats_price_spread() == {}
+
+    def test_flat_price_shows_no_room(self, store):
+        """Nehybná cena znamená poměr 1,0 — a to je ta odpověď na otázku,
+        proč dopravce mlčí i po měsíci sbírání."""
+        self._historie(store, [(900.0, 10)])
+        assert store.stats_price_spread()["ryanair"][0] == pytest.approx(1.0)

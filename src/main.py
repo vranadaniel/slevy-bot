@@ -610,6 +610,23 @@ def run_stats(cfg) -> int:
               f"{podil:>3.0f}% {r['pozorovani'] or 0:>7}  "
               f"{_den(r['nejstarsi']):<12} {_den(r['naposledy'])}")
 
+    # Kde vlastne lezi dosazitelne minimum? Prah 0,70 je odhad, dokud se
+    # nezmeri, jak hluboko se polozky doopravdy dostanou.
+    oracle = HistoryOracle(store)
+    rozptyl = store.stats_price_spread(oracle.min_span_days, oracle.window_days)
+    if rozptyl:
+        print()
+        print("--- JAK HLUBOKO POD VLASTNÍ MEDIÁN SE POLOŽKY DOSTANOU ---")
+        print("  nejlepší poměr za 30 dní; práh na souhrn je u cestování 0,70")
+        print(f"  {'zdroj':<16} {'zralých':>8} {'medián':>8} {'nejlepší':>9}"
+              f"  {'<=0,90':>7} {'<=0,80':>7} {'<=0,70':>7}")
+        for zdroj, pomery in sorted(rozptyl.items(), key=lambda p: -len(p[1])):
+            serazene = sorted(pomery)
+            stred = serazene[len(serazene) // 2]
+            pod = [sum(1 for r in serazene if r <= mez) for mez in (0.90, 0.80, 0.70)]
+            print(f"  {zdroj:<16} {len(serazene):>8} {stred:>8.2f} "
+                  f"{serazene[0]:>9.2f}  " + " ".join(f"{n:>7}" for n in pod))
+
     pohyb = store.stats_price_moves(7)
     print(f"\n  Za týden se cena změnila {pohyb['zmen']}x u {pohyb['polozek']} položek.")
     print("  (do price_log se zapisují jen ZMĚNY, ne každý běh)")

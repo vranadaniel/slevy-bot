@@ -46,6 +46,17 @@ zdroj mlčí právem.
 spadnout **30 % pod vlastní medián** do souhrnu a **55 %** na okamžité
 upozornění. Ceny dopravců se takhle nehýbou často.
 
+Jestli je ten práh dosažitelný, ukáže sekce **JAK HLUBOKO POD VLASTNÍ MEDIÁN
+SE POLOŽKY DOSTANOU**. Pro každou zralou položku počítá `minimum ÷ vlastní
+vážený medián` za stejné okno, jaké používá `HistoryOracle`, a vypíše, kolika
+položkám se to povedlo pod 0,90 / 0,80 / 0,70. Je to jediný způsob, jak
+o prahu rozhodnout z dat: **u katalogového cestování se totiž neměří cena
+letenky, ale nejlevnější nabídka na trase** — a ta je z podstaty blízko dna,
+takže se hýbe podstatně míň než cena konkrétního termínu. Práh 0,70 vznikl
+kalibrací na feedy, kde je referencí ceník z `flights.yaml`; na katalog se
+přenesl bez měření. Sloupec `<=0,70` plný nul znamená, že se tenhle práh
+u dopravců nedá splnit, a ne že ceny nepadají.
+
 `--dry-run` má sekci **TĚSNĚ POD PRAHEM**: oceněné nabídky, které práh minuly,
 seřazené podle toho, o kolik. Je to jediný způsob, jak poznat, jestli jsou
 prahy utažené správně — plná sekce položek chybějících pár procent znamená, že

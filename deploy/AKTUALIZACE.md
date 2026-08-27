@@ -200,6 +200,7 @@ takhle:
 | Co vidíš | Co to znamená |
 |---|---|
 | **zralé = 0** u letenek | ještě není z čeho počítat, historie potřebuje dva dny |
+| **`<=0,70`** je samá nula | práh na souhrn je u toho dopravce nedosažitelný — jeho ceny tolik nepadají |
 | **zralé > 0**, ale nic nechodí | ceny se prostě nehýbou dost — viz níž |
 | **ZDRAVÍ ZDROJŮ** hlásí selhání | zdroj je zablokovaný nebo změnil formát |
 | **AI soudce** na stropu | vyčerpaný denní limit, zbytek se doocení zítra |

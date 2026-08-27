@@ -281,6 +281,31 @@ class Store:
             "span_days": max(0.0, (now - first_ts).total_seconds() / 86400.0),
         }
 
+    def stats_price_spread(self, min_span_days: float = 2.0,
+                           window_days: int = 30) -> dict[str, list[float]]:
+        """Nejlepší poměr, jakého se položky reálně dopracovaly.
+
+        Pro každou zralou položku `minimum ÷ vlastní vážený medián` za totéž
+        okno, jaké používá `HistoryOracle` — jinak by to čísla nešlo porovnat
+        s tím, co bot doopravdy počítá.
+
+        Odpovídá na otázku, kterou práh v konfiguraci jinak jen hádá: je
+        „30 % pod vlastním mediánem" běžný pokles, nebo nedosažitelná meta?
+        U katalogového cestování je to podstatné, protože se tam neměří cena
+        letenky, ale **nejlevnější nabídka na trase** — a ta je z podstaty
+        blízko dna, takže se hýbe míň než cena konkrétního termínu.
+        """
+        out: dict[str, list[float]] = {}
+        for row in self.conn.execute(
+                "SELECT DISTINCT source, uid FROM price_log").fetchall():
+            profile = self.price_profile(row["source"], row["uid"], window_days)
+            if profile is None or profile["span_days"] < min_span_days:
+                continue
+            if profile["median"] > 0:
+                out.setdefault(row["source"], []).append(
+                    profile["min"] / profile["median"])
+        return out
+
     def product_stats(self, source: str, uid: str) -> dict[str, Any] | None:
         row = self.conn.execute(
             "SELECT min_ever, prev_min, samples, first_seen "

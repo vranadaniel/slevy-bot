@@ -1,0 +1,21 @@
+[Unit]
+Description=Hlídání konkrétních tras a příkazy z Telegramu
+
+[Timer]
+# Desetiminutovka je tu kvůli PŘÍKAZŮM, ne kvůli cenám: tohle je jediné místo,
+# kde bot čte, co jsi mu napsal, takže delší cyklus by znamenal, že na
+# `/hlidat` čekáš na odpověď půl hodiny. Samotné ceny se přepočítávají
+# nejvýš jednou za `watch.min_interval_min` (výchozí hodina) — o tom
+# rozhoduje kód, ne tenhle timer.
+#
+# Minuty jsou schválně mimo :00,10,20,30,40,50 (rychlý sken cestování)
+# a mimo :13 a :43 (hlavní sken). Všechny běhy sahají na tutéž SQLite.
+OnCalendar=*:05,15,25,35,45,55
+
+Persistent=true
+
+# Bez rozprostření — kolizím se předchází volbou minut výš.
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

@@ -364,6 +364,19 @@ telegram:
   # Kolik položek nejvýš pošle jeden běh jako instant, aby tě bot nezasypal.
   max_instant_per_run: 8
 
+watch:
+  # Hlídání konkrétního záměru („do Barcelony na 9 nocí, odlet pátek večer").
+  # Opačný směr než zbytek bota: ten čeká, co propadne prahem, tohle hlídá,
+  # co si člověk zadal. Zakládá se přes /hlidat v Telegramu.
+  delay_s: 0.4
+  # Strop dotazů na JEDNO hlídání a běh. Široké okno bez omezení na den
+  # v týdnu by jinak znamenalo dotaz na každý letový den v okně.
+  max_queries_per_watch: 12
+  # Jak často se přepočítávají ceny. Timer běží po deseti minutách kvůli
+  # PŘÍKAZŮM — je to jediné místo, kde bot čte, co jsi mu napsal. Ceny se
+  # takhle rychle nehýbou a tolik dotazů na Ryanair není slušné.
+  min_interval_min: 60
+
 digest:
   # Souhrn chodí po sekcích, ať trhák na předplatném nezapadne mezi hrami.
   # Kvóta platí na každou sekci zvlášť — bez ní zaplní hry celou zprávu.

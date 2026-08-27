@@ -72,6 +72,28 @@ CREATE TABLE IF NOT EXISTS digest_queue (
     PRIMARY KEY (source, uid)
 );
 
+CREATE TABLE IF NOT EXISTS watches (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    origin        TEXT NOT NULL,
+    destination   TEXT NOT NULL,
+    od            TEXT NOT NULL,
+    do            TEXT NOT NULL,
+    nights_min    INTEGER NOT NULL,
+    nights_max    INTEGER NOT NULL,
+    -- Den v tydnu 0-6 a casova okna. NULL = na tom nezalezi.
+    out_day       INTEGER,
+    out_after_h   INTEGER,
+    out_before_h  INTEGER,
+    back_day      INTEGER,
+    back_after_h  INTEGER,
+    back_before_h INTEGER,
+    -- Nejlepsi dosud nalezena cena. Rozhoduje o tom, jestli se "prehlasi".
+    best_czk      REAL,
+    best_key      TEXT,
+    created       TEXT,
+    checked       TEXT
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     k TEXT PRIMARY KEY,
     v TEXT
@@ -313,6 +335,50 @@ class Store:
             (source, uid),
         ).fetchone()
         return dict(row) if row else None
+
+    # ---------- hlídání letenek ----------
+
+    def watch_add(self, zadani: dict) -> int:
+        """Uloží hlídaný záměr a vrátí jeho číslo."""
+        sloupce = ("origin", "destination", "od", "do", "nights_min", "nights_max",
+                   "out_day", "out_after_h", "out_before_h",
+                   "back_day", "back_after_h", "back_before_h")
+        hodnoty = [zadani.get(s) for s in sloupce]
+        cur = self.conn.execute(
+            f"INSERT INTO watches ({', '.join(sloupce)}, created) "
+            f"VALUES ({', '.join('?' * len(sloupce))}, ?)",
+            (*hodnoty, _now()),
+        )
+        self.commit()
+        return int(cur.lastrowid)
+
+    def watch_list(self) -> list[dict]:
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM watches ORDER BY id").fetchall()]
+
+    def watch_delete(self, watch_id: int) -> bool:
+        cur = self.conn.execute("DELETE FROM watches WHERE id = ?", (watch_id,))
+        self.commit()
+        return cur.rowcount > 0
+
+    def watch_save_best(self, watch_id: int, price_czk: float, key: str) -> None:
+        """Zapamatuje si nejlepší nalezenou cenu.
+
+        Je to jediné, co rozhoduje o „přehlášení": zpráva odejde, jen když je
+        nová nabídka levnější než ta zapamatovaná. Bez toho by hlídání psalo
+        tutéž letenku každou půlhodinu.
+        """
+        self.conn.execute(
+            "UPDATE watches SET best_czk = ?, best_key = ?, checked = ? WHERE id = ?",
+            (price_czk, key, _now(), watch_id))
+        self.commit()
+
+    def watch_touch(self, watch_id: int) -> None:
+        """Zaznamená, že se hlídání kontrolovalo, i když se nic nenašlo."""
+        self.conn.execute("UPDATE watches SET checked = ? WHERE id = ?",
+                          (_now(), watch_id))
+        self.commit()
+
 
     # ---------- záloha ----------
 

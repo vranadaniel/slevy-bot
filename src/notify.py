@@ -55,9 +55,18 @@ class Telegram:
         """
         return all(self.send(part) for part in split_message(text))
 
-    def get_updates(self) -> dict:
+    def get_updates(self, offset: int | None = None) -> dict:
+        """Nepřečtené zprávy. `offset` potvrzuje ty předchozí.
+
+        Bez potvrzení vrací Telegram tutéž zprávu pořád dokola, takže by se
+        `/hlidat` založilo při každém běhu znovu. Poslední `update_id` se
+        proto ukládá do `meta`.
+        """
+        params = {"timeout": 0}
+        if offset is not None:
+            params["offset"] = offset
         return self.http.get(
-            API.format(token=self.token, method="getUpdates")
+            API.format(token=self.token, method="getUpdates"), params=params
         ).json()
 
 
@@ -130,6 +139,57 @@ def _noci(count: int) -> str:
 def _fmt_czk(value: float) -> str:
     """1234.5 -> '1 234 Kč' (s pevnou mezerou, ať se to nezalomí)."""
     return f"{value:,.0f}".replace(",", " ") + " Kč"
+
+
+def format_watch(popis: str, trip, predchozi_czk=None, vyhovuje: bool = True) -> str:
+    """Zpráva o nálezu u hlídané trasy.
+
+    Tři podoby, protože tři různé situace:
+
+    * první nález — „tohle je zatím nejlepší"
+    * zlepšení — vedle nové ceny stojí ta stará, ať je vidět, o kolik
+    * nic nesedí — nabídne se nejlevnější kombinace v okně a řekne se rovnou,
+      že časy nesedí. Mlčení, ze kterého se nepozná, jestli se nic nenašlo
+      nebo je něco rozbité, je tady ta nejhorší odpověď.
+    """
+    cena = _fmt_czk(trip.price_czk)
+
+    if not vyhovuje:
+        hlava = "🔎 <b>Nic přesně podle zadání</b>"
+        podnadpis = "Nejlevnější v okně, ale časy nesedí:"
+    elif predchozi_czk and predchozi_czk > trip.price_czk:
+        usetreno = _fmt_czk(predchozi_czk - trip.price_czk)
+        hlava = "📉 <b>Zlevnilo hlídané spojení</b>"
+        podnadpis = (f"<b>{cena}</b> místo {_fmt_czk(predchozi_czk)} "
+                     f"— o {usetreno} míň")
+    else:
+        hlava = "🎯 <b>Nález na hlídané trase</b>"
+        podnadpis = f"<b>{cena}</b>"
+
+    lines = [hlava, "", html.escape(popis), "", podnadpis]
+    if not vyhovuje:
+        lines.append(f"<b>{cena}</b>")
+    lines.append(f"📅 {html.escape(trip.label())}")
+    lines.append("")
+    lines.append(f'<a href="{html.escape(trip.url, quote=True)}">Otevřít na Ryanairu</a>')
+    return "\n".join(lines)
+
+
+def format_watch_list(watches: list) -> str:
+    """Přehled hlídání pro `/hlidani`."""
+    if not watches:
+        return ("Zatím se nic nehlídá.\n\n"
+                "Založíš to takhle:\n<code>/hlidat BCN 15.8. 15.10. 9</code>")
+
+    lines = ["<b>Hlídám tohle:</b>", ""]
+    for watch in watches:
+        stav = (f"nejlíp zatím {_fmt_czk(watch.best_czk)}" if watch.best_czk
+                else "zatím bez nálezu")
+        lines.append(f"<b>{watch.id}.</b> {html.escape(watch.label())}")
+        lines.append(f"    {stav}")
+    lines.append("")
+    lines.append("Zrušit: <code>/zrusit 1</code>")
+    return "\n".join(lines)
 
 
 def format_calendar(extra: dict, price_czk: float | None = None) -> str | None:

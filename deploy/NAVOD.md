@@ -154,6 +154,41 @@ už ti bot poslal dřív a deduplikace správně mlčí.
 ## 8. Zkontroluj, že poběží samo
 
 ```bash
+## Hlídání konkrétní cesty
+
+Kromě slev umí bot hlídat, co si zadáš. Napiš mu do Telegramu:
+
+```
+/hlidat BCN 15.8. 15.10. 9 tam=pá@17-23 zpet=ne@11-18
+```
+
+Čte se to takhle: **do Barcelony na 9 nocí**, odlet kdykoliv mezi 15. 8.
+a 15. 10., **odlet v pátek mezi 17. a 23. hodinou** a **návrat v neděli mezi
+11. a 18.** — tedy tak, aby se cesta vešla do dvou víkendů a ubrala co nejmíň
+dovolené.
+
+Povinné je jen tohle: `/hlidat BCN 15.8. 15.10. 9`. Zbytek je volitelný.
+
+| co | jak |
+|---|---|
+| rozsah nocí | `7-10` místo `9` |
+| jiné odletové letiště | `odkud=VIE` |
+| jen den | `tam=pá` |
+| jen čas | `zpet=@11-18` |
+| co se hlídá | `/hlidani` |
+| zrušit | `/zrusit 3` |
+| nápověda | `/pomoc` |
+
+Bot se ozve, jakmile něco najde, a **znovu vždycky, když najde levnější**.
+Stejnou nabídku za stejnou cenu už neposílá. Když v zadaných časech nic
+nelétá, řekne to a nabídne nejlevnější, co v okně je.
+
+Odpověď na příkaz přijde do deseti minut, ceny se přepočítávají jednou
+za hodinu.
+
+Hlídání umí **jen linky Ryanairu** — na evropský prodloužený víkend to sedí,
+na dálkové lety ne.
+
 systemctl list-timers 'slevy-*'
 ```
 
@@ -162,6 +197,7 @@ GitHub Actions nikdy neuměly zobrazit:
 
 ```
 NEXT                        LEFT     UNIT                 ACTIVATES
+Fri 2026-07-24 12:15:00 CET 1min     slevy-watch.timer    slevy-watch.service
 Fri 2026-07-24 12:20:00 CET 3min     slevy-travel.timer   slevy-travel.service
 Fri 2026-07-24 12:43:00 CET 21min    slevy-scan.timer     slevy-scan.service
 Fri 2026-07-24 19:09:00 CET 7h       slevy-digest.timer   slevy-digest.service

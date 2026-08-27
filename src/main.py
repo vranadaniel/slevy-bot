@@ -24,7 +24,8 @@ from .config import load_config
 from .fx import load_fx
 from .net import build_http
 from .notify import (HRY, Telegram, format_digest, format_health,
-                     format_instant, format_term, group_of)
+                     format_instant, format_term, format_watch,
+                     format_watch_list, group_of)
 from .oracles.declared import DeclaredOracle
 from .oracles.flights import FlightOracle
 from .oracles.history import HistoryOracle
@@ -40,6 +41,8 @@ from .sources.ryanair import RyanairSource
 from .sources.wizzair import WizzAirSource
 from .sources.travel import build_travel_sources
 from .sources.travelpayouts import TravelpayoutsSource
+from .watch import (NAPOVEDA, ChybaZadani, Watch, WatchEngine,
+                    _bez_diakritiky, parse_watch)
 from .store import Store
 
 log = logging.getLogger("slevy")
@@ -777,6 +780,180 @@ def _zkusit_endpointy(http, headers, origin: str, dest: str) -> None:
     print("unese cenový kalendář trasy, a navěsím ho na zprávy o letenkách.")
 
 
+def _watch_z_radku(row) -> Watch:
+    return Watch(
+        id=int(row["id"]), origin=row["origin"], destination=row["destination"],
+        od=dt.date.fromisoformat(row["od"]), do=dt.date.fromisoformat(row["do"]),
+        nights_min=int(row["nights_min"]), nights_max=int(row["nights_max"]),
+        out_day=row["out_day"], out_after_h=row["out_after_h"],
+        out_before_h=row["out_before_h"], back_day=row["back_day"],
+        back_after_h=row["back_after_h"], back_before_h=row["back_before_h"],
+        best_czk=row["best_czk"], best_key=row["best_key"],
+    )
+
+
+def _prikaz(cfg, store, text: str):
+    """Jeden příkaz z Telegramu. Vrací text odpovědi, nebo None."""
+    slovo = _bez_diakritiky(text.split()[0].lower().lstrip("/").split("@")[0])
+
+    if slovo == "hlidat":
+        try:
+            zadani = parse_watch(text, _domaci_letiste(cfg))
+        except ChybaZadani as exc:
+            return str(exc)
+        cislo = store.watch_add(zadani)
+        watch = _watch_z_radku(store.watch_list()[-1])
+        return (f"✅ Založeno hlídání č. <b>{cislo}</b>\n\n"
+                f"{watch.label()}\n\nOzvu se, jakmile něco najdu.")
+
+    if slovo == "hlidani":
+        return format_watch_list([_watch_z_radku(r) for r in store.watch_list()])
+
+    if slovo == "zrusit":
+        casti = text.split()
+        if len(casti) < 2 or not casti[1].isdigit():
+            return "Které? Napiš třeba <code>/zrusit 1</code>."
+        if store.watch_delete(int(casti[1])):
+            return f"Hlídání č. {casti[1]} zrušeno."
+        return f"Hlídání č. {casti[1]} neexistuje."
+
+    if slovo in ("pomoc", "help", "start"):
+        return NAPOVEDA
+
+    return None
+
+
+def _zpracuj_prikazy(cfg, store, telegram) -> int:
+    """Přečte nové zprávy z Telegramu a odpoví na příkazy.
+
+    Bot dosud uměl jen mluvit. Tohle je jediné místo, kde poslouchá — bez
+    webhooku, jen doptáním při každém běhu, takže není potřeba otevřený port
+    ani veřejná adresa.
+
+    `offset` je podstatný: bez potvrzení vrací Telegram tutéž zprávu pořád
+    dokola a `/hlidat` by se zakládalo při každém běhu znovu.
+    """
+    if telegram is None:
+        return 0
+
+    ulozeny = store.get_meta("telegram:offset")
+    try:
+        data = telegram.get_updates(int(ulozeny) + 1 if ulozeny else None)
+    except Exception as exc:  # noqa: BLE001 — výpadek nesmí shodit hlídání
+        log.warning("Nepodařilo se přečíst zprávy z Telegramu: %s", exc)
+        return 0
+
+    posledni, zpracovano = None, 0
+    for update in (data or {}).get("result") or []:
+        posledni = update.get("update_id")
+        zprava = update.get("message") or update.get("channel_post") or {}
+        text = (zprava.get("text") or "").strip()
+        # Příkazy se berou JEN z vlastního chatu. Bota si může najít kdokoliv
+        # a zakládat hlídání cizím lidem není žádoucí.
+        chat = str((zprava.get("chat") or {}).get("id") or "")
+        if chat != str(cfg.telegram_chat) or not text.startswith("/"):
+            continue
+
+        odpoved = _prikaz(cfg, store, text)
+        if odpoved:
+            telegram.send(odpoved)
+            zpracovano += 1
+
+    if posledni is not None:
+        store.set_meta("telegram:offset", str(posledni))
+    return zpracovano
+
+
+def _cerstve_zkontrolovano(row, interval_min: int) -> bool:
+    if interval_min <= 0 or not row["checked"]:
+        return False
+    try:
+        kdy = dt.datetime.fromisoformat(row["checked"])
+    except ValueError:
+        return False
+    if kdy.tzinfo is None:
+        kdy = kdy.replace(tzinfo=dt.timezone.utc)
+    return dt.datetime.now(dt.timezone.utc) - kdy < dt.timedelta(minutes=interval_min)
+
+
+def _domaci_letiste(cfg) -> str:
+    letiste = cfg.get("sources.ryanair.airports", []) or ["PRG"]
+    return str(letiste[0])
+
+
+def run_watch(cfg) -> int:
+    """Hlídání konkrétních záměrů.
+
+    Opačný směr než zbytek bota: ten sbírá, co zdroje nabídnou, a hlásí, co je
+    podezřele levné. Tady člověk řekne, co chce, a bot na to hlídá nejlepší
+    možnost — a přehlásí ji, jakmile se objeví lepší.
+    """
+    http = build_http(cfg)
+    store = Store(cfg.db_path)
+    telegram = (Telegram(http, cfg.telegram_token, cfg.telegram_chat)
+                if cfg.telegram_token and cfg.telegram_chat else None)
+
+    prikazu = _zpracuj_prikazy(cfg, store, telegram)
+    if prikazu:
+        log.info("Zpracováno %s příkazů z Telegramu", prikazu)
+
+    radky = store.watch_list()
+    if not radky:
+        log.info("Není co hlídat (založ přes /hlidat v Telegramu)")
+        store.close()
+        return 0
+
+    engine = WatchEngine(
+        http,
+        delay_s=float(cfg.get("watch.delay_s", 0.4)),
+        max_queries=int(cfg.get("watch.max_queries_per_watch", 12)),
+    )
+
+    interval = int(cfg.get("watch.min_interval_min", 60))
+    for row in radky:
+        # Timer běží po deseti minutách kvůli příkazům; ceny se přepočítávají
+        # řidčeji. Bez tohohle by jedno hlídání znamenalo stovky dotazů denně
+        # na trasu, jejíž cena se za den sotva hne.
+        if _cerstve_zkontrolovano(row, interval):
+            continue
+        watch = _watch_z_radku(row)
+        vysledek = engine.best_trip(watch)
+        trip = vysledek.vyhovujici
+
+        if trip is not None:
+            # Přehlašuje se JEN zlepšení. Bez toho by hlídání psalo tutéž
+            # letenku každou půlhodinu.
+            zlepseni = watch.best_czk is None or trip.price_czk < watch.best_czk - 1
+            if not zlepseni:
+                store.watch_touch(watch.id)
+                log.info("Hlídání %s: nic lepšího než %s Kč",
+                         watch.destination, int(watch.best_czk or 0))
+                continue
+            zprava = format_watch(watch.label(), trip, watch.best_czk)
+            if telegram is None or telegram.send(zprava):
+                store.watch_save_best(watch.id, trip.price_czk, trip.key())
+            log.info("Hlídání %s: %s Kč, %s", watch.destination,
+                     int(trip.price_czk), trip.label())
+            continue
+
+        nahradni = vysledek.nahradni
+        # Náhradní nabídka se posílá, jen dokud hlídání nikdy nic nesplnilo,
+        # a každá jen jednou — jinak by přeostřené zadání znamenalo otravování.
+        klic = f"nahradni:{nahradni.key()}" if nahradni else None
+        if nahradni is None or watch.best_czk is not None or watch.best_key == klic:
+            store.watch_touch(watch.id)
+            continue
+
+        zprava = format_watch(watch.label(), nahradni, None, vyhovuje=False)
+        if telegram is None or telegram.send(zprava):
+            store.watch_save_best(watch.id, None, klic)
+        log.info("Hlídání %s: nic v zadaných časech, poslána náhrada",
+                 watch.destination)
+
+    store.close()
+    return 0
+
+
 def run_check_travelpayouts(cfg) -> int:
     """Ověří token a ukáže, jak odpověď doopravdy vypadá.
 
@@ -982,6 +1159,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="co bot nasbíral: zralost historie, upozornění, fronta")
     parser.add_argument("--check-itad", action="store_true",
                         help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
+    parser.add_argument("--watch", action="store_true",
+                        help="zkontroluje hlidane trasy a prikazy z Telegramu")
     parser.add_argument("--check-travelpayouts", action="store_true",
                         help="ověří token k Travelpayouts, tvar odpovědi a další endpointy")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -1003,6 +1182,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_stats(cfg)
     if args.check_itad:
         return run_check_itad(cfg)
+    if args.watch:
+        return run_watch(cfg)
     if args.check_travelpayouts:
         return run_check_travelpayouts(cfg)
     if args.test_telegram:

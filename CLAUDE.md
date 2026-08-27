@@ -31,6 +31,7 @@ python -m src.main --test-telegram
 python -m src.main --bootstrap               # označí feedy za viděné, nic nepošle
 python -m src.main --stats                   # co bot nasbíral, bez sahání na síť
 python -m src.main --backup                  # konzistentní kopie databáze
+python -m src.main --watch                   # hlidane trasy + prikazy z Telegramu
 ```
 
 `--explain` je hlavní ladicí nástroj — ukáže cenu, credibility, odkud přišla
@@ -109,6 +110,68 @@ Nízká hodnota položku nezahodí, jen jí zavře cestu k okamžitému upozorn�
 Výjimka v `_finalize`: když hodnota přišla z `references` nebo `history`
 s vysokou jistotou, práh credibility se přeskočí — víme, co ta věc stojí,
 a nezáleží na tom, kolikátá je v žebříčku.
+
+## Hlídání konkrétního záměru
+
+`src/watch.py` je jediná část, která jde proti hlavnímu proudu bota. Zbytek
+sbírá, co zdroje nabídnou, a hlásí, co je podezřele levné. Hlídání funguje
+obráceně: člověk řekne „do Barcelony na devět nocí mezi polovinou srpna
+a polovinou října, odlet v pátek večer, návrat v neděli odpoledne" a bot na to
+hledá nejlepší možnost. Zakládá se z Telegramu přes `/hlidat`.
+
+Stojí to na dvou endpointech Ryanairu, oba veřejné a bez klíče (změřeno
+27. 8. 2026):
+
+* **`farfnd/v4/roundTripFares` na konkrétní trase bere `durationFrom`
+  a `durationTo`.** Dotaz na 9–9 vrátil přesně devět nocí. Je to týž endpoint,
+  ze kterého `sources/ryanair.py` bere trasy — tam se `duration` použít nedá,
+  protože odpověď zúží na zlomek sítě, ale **u jedné trasy funguje**. Odpověď
+  navíc nese přesné časy odletu i příletu obou letů, takže „pátek večer" se dá
+  vyhodnotit, ne odhadnout.
+* **`timtbl/3/schedules/…` vrátí letový řád na měsíc jedním požadavkem.**
+  Tohle je ta věc, na které celý návrh stojí: na trase PRG–BCN je **25 z 27 dnů
+  jen jeden let denně** a jeho čas se den ode dne mění (21:30, 10:05, 13:35).
+  „Nejlevnější let toho dne" a „jediný let toho dne" je tedy skoro vždycky
+  totéž — čas se nedá vybrat, dá se vybrat **den, na který ten čas padne**.
+  Řád se proto stáhne napřed a na ceny se ptáme jen na dny, které do zadání
+  sedí. Je to zároveň jediná úspora dotazů, která tu funguje.
+
+Věci, které vypadají jako nedodělek, ale nejsou:
+
+**Časové okno má obě meze.** „Neděle do 15:00" splní i let v 5:45 — jenže ten
+tě o ten víkend připraví, a smysl zadání byl opačný. Proto `back_after_h`
+i `back_before_h`.
+
+**Když nic nesedí, pošle se náhrada.** `Vysledek` nese dvě položky:
+`vyhovujici` a `nahradni`. Přeostřené zadání (třeba neděle 11–18 z Barcelony,
+odkud Ryanair v neděli létá jen v 5:45) by jinak znamenalo ticho — a ticho,
+ze kterého se nepozná, jestli se nic nenašlo nebo je něco rozbité, je tady ta
+nejhorší odpověď. Stejný důvod jako u sekce TĚSNĚ POD PRAHEM. Náhradní dotaz
+stojí jeden požadavek a posílá se jen u hlídání, které dosud nikdy nic
+nesplnilo, a každý jen jednou.
+
+**Přehlašuje se jen zlepšení.** Rozhoduje `watches.best_czk`; do něj se zapisuje
+**jen cena vyhovující nabídky**, náhradní si ukládá pouze `best_key`. Bez toho
+by hlídání psalo tutéž letenku každou hodinu.
+
+**Timer běží po deseti minutách kvůli PŘÍKAZŮM, ne kvůli cenám.** `run_watch`
+je jediné místo, kde bot čte, co jsi mu napsal — bez webhooku, jen doptáním
+přes `getUpdates`, takže není potřeba otevřený port ani veřejná adresa. Delší
+cyklus by znamenal, že na odpověď na `/hlidat` čekáš půl hodiny. Ceny se
+přepočítávají nejvýš jednou za `watch.min_interval_min` (výchozí hodina);
+řídí to sloupec `checked`, ne timer.
+
+**`offset` u `getUpdates` je povinný.** Bez potvrzení vrací Telegram tutéž
+zprávu pořád dokola a `/hlidat` by se zakládalo při každém běhu znovu. Poslední
+`update_id` se drží v `meta`.
+
+**Příkazy se berou jen z vlastního chatu.** Bota si může najít kdokoliv;
+`_zpracuj_prikazy` proto porovnává `chat.id` s `TELEGRAM_CHAT_ID` a cizí
+zprávy tiše zahodí.
+
+**Hlídání umí jen síť Ryanairu.** Wizz Air obdobu `duration` nemá a agregátory
+neumí říct „devět nocí". Na evropský prodloužený víkend to stačí, na dálkové
+lety ne — a nemá smysl to zakrývat.
 
 ## Věci, které vypadají jako chyba, ale nejsou
 

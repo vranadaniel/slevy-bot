@@ -273,7 +273,9 @@ systemctl start slevy-travel && journalctl -u slevy-travel -n 30 --no-pager
 **Chci to celé vypnout**
 
 ```bash
-systemctl disable --now slevy-scan.timer slevy-travel.timer \n                        slevy-digest.timer slevy-backup.timer
+systemctl disable --now slevy-scan.timer slevy-travel.timer \
+                        slevy-digest.timer slevy-backup.timer \
+                        slevy-watch.timer
 ```
 
 ---

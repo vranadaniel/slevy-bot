@@ -1,6 +1,8 @@
 # Bot na lov extrémních slev → Telegram
 
-Hlídá deset zdrojů a posílá na Telegram jen věci, které stojí zlomek své skutečné ceny.
+Hlídá deset zdrojů a posílá na Telegram jen věci, které stojí zlomek své
+skutečné ceny. Kromě toho umí hlídat **konkrétní cestu, kterou si zadáš** —
+cíl, termínové okno, počet nocí i časy odletu a návratu.
 Vznikl kvůli jedné konkrétní nabídce: **Google Gemini AI Pro na 18 měsíců za 65 Kč**,
 tedy necelé procento běžné ceny.
 
@@ -187,6 +189,7 @@ systemctl start slevy-digest         # poslat souhrn hned
 | `slevy-travel.timer` | každých 10 minut | jen cestování — error fare mizí během hodin |
 | `slevy-digest.timer` | 19:09 místního času | odešle nasbírané položky |
 | `slevy-backup.timer` | 4:20 | konzistentní kopie databáze, drží posledních sedm |
+| `slevy-watch.timer` | v :05, :15, :25… | hlídané trasy a příkazy z Telegramu |
 
 Minuty jsou schválně nekulaté a různé: rychlý sken cestování a hlavní sken sahají
 na tutéž SQLite databázi, takže se nemají potkávat.
@@ -227,6 +230,8 @@ python -m src.main --dump offers.json            # syrová data na diagnostiku
 python -m src.main --test-telegram               # ověří token a chat_id
 python -m src.main --check-itad                  # ověří klíč k IsThereAnyDeal
 python -m src.main --check-travelpayouts         # ověří token a tvar odpovědi
+python -m src.main --check-references            # která pravidla ceníku pálí pořád
+python -m src.main --watch                       # hlídané trasy + příkazy z Telegramu
 python -m src.main --no-ai                       # vypne AI soudce
 ```
 
@@ -242,6 +247,77 @@ dvakrát, ale zralá až za dva dny. Dokud je nula, katalogový zdroj mlčí pr�
 seřazené podle toho o kolik. Je to jediný způsob, jak poznat, jestli jsou prahy
 utažené správně — plná sekce položek, kterým chybí pár procent, znamená, že se
 práh možná ubírá o kus moc.
+
+---
+
+## Hlídání konkrétní cesty
+
+Všechno ostatní v botovi funguje jedním směrem: sbírá, co zdroje nabídnou,
+a hlásí to, co je podezřele levné. Hlídání jde opačně — **řekneš, co chceš,
+a bot na to hledá nejlepší možnost**. Zakládá se z Telegramu.
+
+```
+/hlidat BCN 15.8. 15.10. 9 tam=pá@17-23 zpet=ne@11-18
+```
+
+Do Barcelony na devět nocí někdy mezi 15. 8. a 15. 10., odlet v pátek mezi
+17. a 23. hodinou, návrat v neděli mezi 11. a 18. — tedy tak, aby se cesta
+vešla do dvou víkendů a ubrala co nejmíň dovolené.
+
+Povinné je jen `/hlidat BCN 15.8. 15.10. 9`, zbytek je volitelný:
+
+| co | jak |
+|---|---|
+| rozsah nocí | `7-10` místo `9` |
+| jiné odletové letiště | `odkud=VIE` |
+| jen den, bez času | `tam=pá` |
+| jen čas, bez dne | `zpet=@11-18` |
+| co se hlídá | `/hlidani` |
+| zrušit | `/zrusit 3` |
+| nápověda | `/pomoc` |
+
+Bot se ozve při prvním nálezu a **znovu vždycky, když najde levnější** —
+vedle nové ceny stojí ta stará a rozdíl. Stejnou nabídku za stejnou cenu už
+neposílá.
+
+### Na čem to stojí
+
+Dva veřejné endpointy Ryanairu, oba bez klíče, oba změřené živě:
+
+* **`farfnd/v4/roundTripFares` na konkrétní trase bere `durationFrom`
+  a `durationTo`.** Je to týž endpoint, ze kterého se berou trasy — tam se
+  počet nocí použít nedá, protože odpověď zúží na zlomek sítě, ale u jedné
+  trasy funguje přesně. Nese i časy odletu a příletu obou letů, takže „pátek
+  večer" se vyhodnotí, neodhaduje.
+* **`timtbl/3/schedules/…` vrátí letový řád na měsíc jedním požadavkem.**
+  Na tomhle celý návrh stojí: na PRG–BCN je 25 z 27 dnů **jen jeden let denně**
+  a jeho čas se den ode dne mění. „Nejlevnější let toho dne" a „jediný let
+  toho dne" je tedy skoro vždycky totéž — čas se nedá vybrat, dá se vybrat
+  **den, na který ten čas padne**. Řád se proto stáhne napřed a na ceny se
+  posílají dotazy jen na dny, které do zadání sedí.
+
+### Dvě věci, které vypadají jako detail
+
+**Časové okno má obě meze.** „Neděle do 15:00" splní i let v 5:45 — jenže ten
+tě o ten víkend připraví, a smysl zadání byl opačný.
+
+**Když nic nesedí, přijde náhrada.** Přeostřené zadání (třeba návrat z Barcelony
+v neděli mezi 11 a 18, kdy tam Ryanair létá jen v 5:45) by jinak znamenalo
+ticho — a z ticha se nepozná, jestli se nic nenašlo, nebo je něco rozbité.
+Bot proto jedním dotazem najde nejlevnější kombinaci v okně a rovnou řekne,
+že časy nesedí.
+
+### Co to stojí a co to neumí
+
+Timer běží po deseti minutách **kvůli příkazům, ne kvůli cenám**. `run_watch`
+je jediné místo, kde bot čte, co jsi mu napsal — přes `getUpdates`, bez
+webhooku, takže není potřeba otevřený port ani veřejná adresa. Ceny se
+přepočítávají nejvýš jednou za `watch.min_interval_min` (výchozí hodina).
+Příkazy se berou jen z vlastního chatu; bota si totiž může najít kdokoliv.
+
+**Hlídání umí jen síť Ryanairu.** Wizz Air obdobu `duration` nemá a agregátory
+neumějí říct „devět nocí". Na evropský prodloužený víkend to stačí, na dálkové
+lety ne.
 
 ---
 
@@ -263,6 +339,17 @@ thresholds:
 Chodí toho moc? Sniž `instant_ratio` na 0,03. Chodí toho málo?
 Zvedni `digest_ratio` nebo přidej pravidla do `references.yaml` — každé nové
 pravidlo ušetří práci AI soudci a zpřesní ocenění.
+
+Než ale prahem pohneš, změř, jestli je vůbec dosažitelný. `--stats` má sekci
+**JAK HLUBOKO POD VLASTNÍ MEDIÁN SE POLOŽKY DOSTANOU**: pro každou zralou
+položku spočítá `minimum ÷ vlastní vážený medián` za stejné okno, jaké
+používá `HistoryOracle`, a vypíše, kolika se to povedlo pod 0,90 / 0,80 / 0,70.
+Prázdný sloupec u prahu znamená, že se nedá splnit, a ne že ceny nepadají.
+
+A než přidáš pravidlo do `references.yaml`, pusť `--check-references`. Pro
+každé pravidlo spočítá, **kolik procent položek by prahem prošlo i za svou
+úplně běžnou cenu**. Sto procent znamená, že pravidlo pálí vždycky a nic tím
+neříká — typicky u antiviru a Windows, kde je ceníková cena fikce.
 
 ### Souhrn a popularita her
 
@@ -291,6 +378,25 @@ Prázdná sekce s hrami → sniž na 0,5. Pořád brak → zvedni na 0,7. Skute�
 popularita     0.94  (92 % z 742000 hodnocení, vydáno 2025-05-30)
 ```
 
+Popularita ale nestačí. Rozhoduje o ní, jestli hru někdo hrál, ne jestli je
+to velký titul — povedená indie hra má hodnocení jako AAA. A protože se
+o úrovni rozhoduje **poměrem**, mají levné hry systémovou výhodu: hra za 3 Kč
+z původních 100 vyjde na 3 %, kdežto AAA za 200 Kč z patnácti stovek na 13 %.
+Souhrn se tím plnil drobnostmi a velký titul v obrovské slevě mezi nimi zapadl.
+
+Proto rozhoduje i **ceníková cena**:
+
+```yaml
+games:
+  min_value_czk: 600     # hra, která ani v plné ceně nestojí 600 Kč, neprojde
+```
+
+Šest set korun vzešlo z měření na katalogu GOG (12 648 her, ceny rovnou
+v korunách): hluboko v katalogu je 100 % titulů pod 600 Kč, kdežto nad tou
+hranicí leží Skyrim, System Shock nebo Silent Hill 2. Filtr běží **před**
+rozdělením na upozornění a souhrn — u her umí okamžité upozornění spustit
+vlastní cenová historie, takže filtrovat jen souhrn by nestačilo.
+
 ### Cestování
 
 Letenky a hotely se chovají jinak než digitální klíče a mají proto vlastní
@@ -315,6 +421,11 @@ Prakticky to znamená, že **Ryanair, Wizz Air a Travelpayouts první dva dny
 mlčí** a pak posílají jen skutečné propady: trasa musí spadnout 30 % pod svůj
 vlastní medián do souhrnu a 55 % na okamžité upozornění.
 
+Je to vzácné, ne nedosažitelné — změřeno po měsíci sbírání: typická trasa
+Ryanairu se za třicet dní dostane na 88 % svého mediánu a pod 70 % se dostane
+14 tras z 212. Napříč všemi třemi dopravci je to kolem dvou nálezů denně.
+Ověřit to na vlastních datech umí `--stats`.
+
 Běžné ceny letenek jsou v **`flights.yaml`** — ceník po regionech světa,
 postavený na reálných nabídkách z cestujlevne.com, travelfree.info
 a fly4free.com:
@@ -329,6 +440,14 @@ a fly4free.com:
 `great_czk` je tam proto, že **jednotné procento nefunguje**: skvělá cena do
 Evropy leží na 36 % běžné, do jihovýchodní Asie na 62 %. Bez toho by práh
 nastavený na Evropu dálkové lety umlčel.
+
+Ke katalogovým letenkám se do zprávy dopisuje **cenový kalendář trasy** —
+„levněji 12. 10. za 620 Kč", s proklikem rovnou na ten termín. Bez něj bot vidí
+jen dnešní cenu a nemá jak poznat, že kouká shodou okolností na drahý den.
+Bere se z `v3/grouped_prices` u Travelpayouts (83 dnů na jeden požadavek) a ptá
+se jen na to, co odchází do Telegramu; strop je `calendar_max_per_run`. Hodnota
+z toho **nikdy nevzniká** — porovnávat cenu dopravce s trhem je tentýž kruh,
+kvůli kterému bot hlásil Krakov za 748 Kč jako trhák.
 
 Cizí uzly řídí `hub_airports` a `hub_min_typical_czk`. Rozhoduje `typical_czk`
 regionu z téhož ceníku, ne další ruční seznam — data se dělí sama: dálkové
@@ -390,10 +509,15 @@ i to, jestli prahy a ceník pořád dávají smysl.
 
 - **Studený start.** První týden nemá katalog cenovou historii a jede na ceníku
   a AI. Čekej víc falešných poplachů; po týdnu se to srovná samo.
-- **Herní klíče se neocení.** Na hry nemáme referenční ceny. Nejbližší krok je
-  přidat [IsThereAnyDeal](https://docs.isthereanydeal.com/) jako další oracle —
-  má free klíč a dává reálná historická minima. Patří do `src/oracles/`, ne mezi
-  zdroje: nedodává nabídky, ale referenční ceny.
+- **Ruční ceník stárne.** Pravidlo v `references.yaml` může nést úplně správnou
+  ceníkovou cenu výrobce a přesto být k ničemu: antivirus, VPN ani Windows se
+  za ni nikdy neprodávají, takže pravidlo hlásí slevu pořád — a co pálí
+  vždycky, není signál. Ceník navíc obchází práh důvěryhodnosti, takže jedno
+  vadné pravidlo znamená desítky zpráv. Hlídá to `--check-references`.
+- **Hlídání umí jen Ryanair.** Wizz Air nemá obdobu `duration` a agregátory
+  neumějí říct „devět nocí". Na evropský prodloužený víkend to stačí, dál ne.
+- **Cenový kalendář jen u katalogu.** Feedové nabídky nenesou kód cílového
+  letiště, jen region, takže se u nich „a kdy je to levněji" nedá zjistit.
 - **České zdroje chybí.** Heureka, Slevomat, Mall i Hlídač shopů vracejí 403,
   Skrz feed nemá a český Pepper neexistuje. Schůdnější cesta jsou XML feedy
   jednotlivých e-shopů pro Heureku, ne agregátory.
@@ -417,7 +541,8 @@ src/
 ├── shipping.py       doručuje obchod do ČR?
 ├── money.py          parsování cen ze čtyř národních zápisů
 ├── fx.py             kurzy ČNB
-├── notify.py         Telegram
+├── notify.py         Telegram — odesílání i čtení příkazů
+├── watch.py          hlídání konkrétního záměru (opačný směr než zbytek)
 ├── text.py           skládání českých tvarů bez diakritiky
 ├── sources/          odkud nabídky chodí
 │   ├── kinguin.py         katalog klíčů a předplatného

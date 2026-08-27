@@ -85,6 +85,7 @@ Mají se vypsat **tři řádky** a u každého čas, kdy poběží příště:
 
 ```
 NEXT                        LEFT     UNIT                ACTIVATES
+Mon 2026-07-27 21:15:00 CEST 1min    slevy-watch.timer    slevy-watch.service
 Mon 2026-07-27 21:20:00 CEST 3min    slevy-travel.timer   slevy-travel.service
 Mon 2026-07-27 21:43:00 CEST 26min   slevy-scan.timer     slevy-scan.service
 Tue 2026-07-28 04:20:00 CEST 7h      slevy-backup.timer   slevy-backup.service
@@ -211,6 +212,15 @@ aby se dostala do souhrnu, a **55 %** na okamžité upozornění. Ceny dopravců
 takhle nehýbou často, takže ticho je normální stav, ne porucha.
 
 Kde přesně ty trasy jsou, ukáže:
+
+```bash
+cd /opt/slevy-bot && sudo -u slevy .venv/bin/python -m src.main --check-references
+```
+
+Vypíše pravidla ručního ceníku, která **pálí pořád**. Sloupec `vždy` říká,
+kolik procent položek by prahem prošlo i za svou úplně běžnou cenu — sto
+procent znamená, že to pravidlo nic neříká a patří opravit. Typicky u antiviru
+a Windows, kde se za ceníkovou cenu nikdy neprodává.
 
 ```bash
 cd /opt/slevy-bot && sudo -u slevy .venv/bin/python -m src.main --dry-run --only travel

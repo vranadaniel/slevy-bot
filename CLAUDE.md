@@ -431,13 +431,39 @@ Odpověď nese `origin`, `destination`, `price`, `transfers`, `departure_at`,
 `link`, `airline` a doby letu. `link` je relativní (`/search/PRG2208SKP1?t=…`),
 takže se předsazuje `https://www.aviasales.com`.
 
-Používá se **jediný endpoint** (`v3/prices_for_dates`), přestože token otevírá
-i další. Druhá půlka `--check-travelpayouts` proto projde žebřík kandidátů
-(`grouped_prices`, `get_latest_prices`, `prices/calendar`, `month-matrix`,
-`city-directions`) a u každého vypíše stav, počet záznamů a syrová jména polí.
-Cílem je **cenový kalendář trasy**: bot dnes vidí jen dnešní cenu a nemá jak
-poznat, že je to shodou okolností drahý termín. Navěsit na endpoint kód dřív,
-než se změří, co vrací, by u tohohle API byla chyba už potřetí.
+Používají se **dva endpointy**. `v3/prices_for_dates` dodává nabídky, které se
+sbírají, a `v3/grouped_prices` k nim dopisuje **cenový kalendář trasy** — bez
+něj bot vidí jen dnešní cenu a nemá jak poznat, že kouká shodou okolností na
+drahý termín.
+
+Změřeno ostrým tokenem 27. 8. 2026 (druhá půlka `--check-travelpayouts`):
+
+| endpoint | odpověď |
+|---|---|
+| `v3/grouped_prices` | **83 dnů**, klíčem datum, pole jako u `prices_for_dates` včetně `link` |
+| `v3/get_latest_prices` | 23 záznamů, jiná pole (`value`, `found_at`, `actual`) |
+| `v1/prices/calendar` | 51 dnů, má `expires_at`, ale **nemá `link`** |
+| `v2/prices/month-matrix` | 30 dnů, pole jako `get_latest_prices` |
+| `v1/prices/cheap` | zanořené dvakrát (cíl → pořadí → záznam) |
+| `v1/city-directions` | 30 cílů — to už umí `prices_for_dates` bez cílové stanice |
+| `v1/prices/month-matrix` | **404**, mrtvý |
+
+Vyhrál `grouped_prices`: nejdelší okno, `link` na ten levnější termín a stejná
+jména polí jako u endpointu, který už parsujeme.
+
+Tři věci, bez kterých je kalendář na škodu:
+
+* **`one_way` se posílá podle nabídky.** Jednosměrná stojí zhruba polovinu
+  zpáteční, takže porovnat jedno s druhým by vyrobilo falešný propad — tentýž
+  důvod, proč mají jednosměrné trasy u Ryanairu vlastní uid.
+* **Ptá se se jen na to, co odchází do Telegramu**, a trasy se deduplikují
+  (tutéž zná Ryanair i Travelpayouts). Jeden požadavek na trasu, strop
+  `calendar_max_per_run`. Na celém katalogu by to bylo nemyslitelné — stejný
+  důvod jako u `ItadOracle.enrich_popularity`.
+* **Nikdy z toho nevzniká hodnota.** Je to údaj do zprávy. Porovnávat cenu
+  dopravce s trhem je přesně ten kruh, kvůli kterému bot hlásil Krakov za
+  748 Kč jako trhák; hodnotu u katalogového cestování smí dodat jen vlastní
+  historie, viz `catalog_history_only`.
 
 **Google Flights nemá jak.** Vlastní API Googlu na letenky (QPX Express) je
 vypnuté od dubna 2018 a náhrada není — ITA Software, která Google Flights

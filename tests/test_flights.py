@@ -11,7 +11,7 @@ import pytest
 
 from src.config import load_config
 from src.oracles.flights import FlightOracle
-from src.sources.base import FEED, Offer
+from src.sources.base import CATALOG, FEED, Offer
 
 
 @pytest.fixture
@@ -761,3 +761,153 @@ class TestCiziUzly:
 
         v = self._verdict("Flights from Frankfurt to Malaga from €29", hub="FRA")
         assert drop_pointless_hubs([v], 0) == [v]
+
+
+class TestCenovyKalendar:
+    """„A kdy je to levněji."
+
+    Bot jinak vidí jen dnešní cenu a nemá jak poznat, že kouká na shodou
+    okolností drahý termín. Endpoint `grouped_prices` vrátí nejlevnější
+    nabídku ke každému dni — ověřeno živě 27. 8. 2026, 83 dnů na dotaz.
+    """
+
+    class FakeHttp:
+        def __init__(self, dny=None, selze=False):
+            self.dny = dny or {}
+            self.selze = selze
+            self.dotazy: list[dict] = []
+
+        def get_json(self, url, params=None, headers=None, **kw):
+            self.dotazy.append(params or {})
+            if self.selze:
+                raise RuntimeError("API neodpovědělo")
+            return {"success": True, "data": self.dny}
+
+    class FakeFx:
+        def to_czk(self, amount, currency):
+            return amount
+
+    def _source(self, http, token="x" * 32):
+        from src.sources.travelpayouts import TravelpayoutsSource
+
+        cfg = load_config()
+        cfg.travelpayouts_token = token
+        cfg.raw["sources"]["travelpayouts"]["delay_s"] = 0
+        return TravelpayoutsSource(http, self.FakeFx(), cfg)
+
+    def _let(self, odkud="PRG", kam="BGY", one_way=True, cena=1200.0, uid=None):
+        return Offer(source="ryanair", kind=CATALOG, uid=uid or f"{odkud}-{kam}",
+                     name="Letenky", price_czk=cena, url="u", category="flight",
+                     merchant="ryanair", credibility=1.0,
+                     extra={"airport": odkud, "destination": kam,
+                            "one_way": one_way})
+
+    def _dny(self):
+        return {
+            "2026-09-01": {"price": 1400, "link": "/search/PRG0109BGY1"},
+            "2026-10-12": {"price": 620, "link": "/search/PRG1210BGY1"},
+            "2026-11-03": {"price": 980, "link": "/search/PRG0311BGY1"},
+        }
+
+    def test_cheapest_day_wins(self):
+        http = self.FakeHttp(self._dny())
+        cena, den, odkaz = self._source(http).cheapest_in_window("PRG", "BGY")
+
+        assert (cena, den) == (620.0, "2026-10-12")
+        assert odkaz.endswith("PRG1210BGY1")
+
+    def test_one_way_matches_the_offer(self):
+        """Jednosměrná stojí zhruba polovinu zpáteční. Porovnat jedno s druhým
+        by vyrobilo falešný propad — tentýž důvod, proč mají jednosměrné trasy
+        u Ryanairu vlastní uid."""
+        http = self.FakeHttp(self._dny())
+        source = self._source(http)
+
+        source.enrich_calendar([self._let(one_way=True, uid="a")])
+        source.enrich_calendar([self._let(one_way=False, uid="b")])
+
+        assert [d["one_way"] for d in http.dotazy] == ["true", "false"]
+
+    def test_offer_gets_the_cheaper_term(self):
+        http = self.FakeHttp(self._dny())
+        offer = self._let(cena=1200.0)
+        self._source(http).enrich_calendar([offer])
+
+        assert offer.extra["kalendar_min_czk"] == 620.0
+        assert offer.extra["kalendar_min_date"] == "2026-10-12"
+        assert offer.extra["kalendar_url"].startswith("https://www.aviasales.com/")
+
+    def test_same_route_is_asked_once(self):
+        """Tutéž trasu zná Ryanair i Travelpayouts. Jeden požadavek na trasu
+        je tu strop, ne doporučení."""
+        http = self.FakeHttp(self._dny())
+        self._source(http).enrich_calendar(
+            [self._let(uid="a"), self._let(uid="b"), self._let(kam="OTP", uid="c")])
+
+        assert len(http.dotazy) == 2
+
+    def test_cap_limits_the_run(self):
+        http = self.FakeHttp(self._dny())
+        lety = [self._let(kam=k, uid=k) for k in ("BGY", "OTP", "AGP", "CPH")]
+        self._source(http).enrich_calendar(lety, max_routes=2)
+
+        assert len(http.dotazy) == 2
+
+    def test_region_name_is_not_an_airport(self):
+        """U feedů je v `destination` název regionu z ceníku, ne kód letiště."""
+        http = self.FakeHttp(self._dny())
+        offer = self._let(kam="southeast asia")
+        self._source(http).enrich_calendar([offer])
+
+        assert http.dotazy == []
+        assert "kalendar_min_czk" not in offer.extra
+
+    def test_failure_does_not_kill_the_run(self):
+        http = self.FakeHttp(selze=True)
+        offer = self._let()
+        self._source(http).enrich_calendar([offer])       # nesmí vyhodit
+
+        assert "kalendar_min_czk" not in offer.extra
+
+    def test_without_token_nothing_is_asked(self):
+        http = self.FakeHttp(self._dny())
+        self._source(http, token="").enrich_calendar([self._let()])
+
+        assert http.dotazy == []
+
+    def test_calendar_never_becomes_a_value(self):
+        """Porovnávat cenu dopravce s trhem je ten kruh, kvůli kterému bot
+        hlásil Krakov za 748 Kč jako trhák. Kalendář je údaj do zprávy."""
+        http = self.FakeHttp(self._dny())
+        offer = self._let(cena=1200.0)
+        self._source(http).enrich_calendar([offer])
+
+        assert offer.ref_price_czk is None
+
+
+class TestZpravaKalendare:
+    def _extra(self, cena=620.0, den="2026-10-12"):
+        return {"kalendar_min_czk": cena, "kalendar_min_date": den}
+
+    def test_cheaper_term_is_named(self):
+        from src.notify import format_calendar
+
+        assert format_calendar(self._extra(), 1200.0) == "levněji 12. 10. za 620\xa0Kč"
+
+    def test_being_the_floor_is_also_news(self):
+        """Že levněji to v celém okně není, je zpráva stejně jako opak."""
+        from src.notify import format_calendar
+
+        assert format_calendar(self._extra(), 620.0) == "nejlevnější termín na trase"
+
+    def test_small_difference_is_not_a_saving(self):
+        """Kalendář a nabídka se ptají v jiný okamžik; pár korun neznamená,
+        že je někde levněji."""
+        from src.notify import format_calendar
+
+        assert format_calendar(self._extra(), 630.0) == "nejlevnější termín na trase"
+
+    def test_without_data_nothing_is_added(self):
+        from src.notify import format_calendar
+
+        assert format_calendar({}, 1200.0) is None

@@ -108,6 +108,13 @@ sources:
     # a nepoužitelný v praxi.
     max_transfers: 1
     limit: 100
+    # Kolik tras se za běh doptá na cenový kalendář (`grouped_prices`).
+    # Ptáme se JEN na to, co se chystá odejít do Telegramu — jeden požadavek
+    # na trasu, takže na celém katalogu by to bylo nemyslitelné. Trasy se
+    # navíc deduplikují, protože tutéž zná Ryanair i Travelpayouts.
+    # Ověřeno 27. 8. 2026: jeden dotaz vrátí 83 dnů a záznamy mají `link`,
+    # takže se dá odkázat rovnou na ten levnější termín. Nula funkci vypne.
+    calendar_max_per_run: 12
     airports: [PRG, BRQ, OSR, VIE, BTS]
 
   # Cestování: letenky, hotely a zájezdy. Jeden parser na všechny weby.

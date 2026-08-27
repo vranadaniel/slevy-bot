@@ -205,6 +205,15 @@ def run_scan(cfg, args) -> int:
             digest, float(cfg.get("itad.min_popularity", 0.6)),
             bool(cfg.get("itad.require_known_popularity", True)))
 
+    # Nejlevnější termín na téže trase. Až tady, na hrstce, co se chystá
+    # odejít — je to jeden požadavek na trasu. Nikdy z toho nevzniká hodnota,
+    # je to údaj do zprávy; porovnávat cenu dopravce s trhem je ten kruh,
+    # kvůli kterému bot hlásil Krakov za 748 Kč jako trhák.
+    if cfg.travelpayouts_token:
+        TravelpayoutsSource(http, fx, cfg).enrich_calendar(
+            [v.offer for v in instant + digest],
+            int(cfg.get("sources.travelpayouts.calendar_max_per_run", 12)))
+
     if args.dry_run:
         report(verdicts, instant, digest, scorer)
         store.close()
@@ -429,6 +438,10 @@ def _queue(store, verdict) -> None:
         # Termín se skládá teď, ne až večer — fronta si nese hotový text
         # a nemusí si pamatovat, ze kterých polí vznikl.
         "term": format_term(offer.extra),
+        # Kalendář se ptá teď; večer už by ten levnější termín mohl být pryč.
+        "kalendar_min_czk": offer.extra.get("kalendar_min_czk"),
+        "kalendar_min_date": offer.extra.get("kalendar_min_date"),
+        "kalendar_url": offer.extra.get("kalendar_url"),
     })
     # Zapsat i u souhrnu, jinak by deduplikace neměla o čem rozhodovat příště.
     store.mark_alerted(offer.source, offer.uid, offer.price_czk, DIGEST)

@@ -132,6 +132,31 @@ def _fmt_czk(value: float) -> str:
     return f"{value:,.0f}".replace(",", " ") + " Kč"
 
 
+def format_calendar(extra: dict, price_czk: float | None = None) -> str | None:
+    """„Levněji 12. 10. za 6 200 Kč", nebo potvrzení, že levněji to není.
+
+    Bez tohohle vidí člověk jen dnešní cenu a nemá jak poznat, jestli nekouká
+    shodou okolností na drahý termín. Obojí je zpráva: že to jinde v okně
+    stojí míň, i že tohle JE to dno.
+    """
+    cena = extra.get("kalendar_min_czk")
+    den = extra.get("kalendar_min_date")
+    if not cena or not den:
+        return None
+
+    try:
+        datum = dt.date.fromisoformat(str(den)[:10])
+        popis = f"{datum.day}. {datum.month}."
+    except ValueError:
+        popis = str(den)[:10]
+
+    # Dvě procenta tolerance: kalendář a nabídka se ptají v jiný okamžik,
+    # takže pár korun rozdílu neznamená, že je někde levněji.
+    if price_czk is not None and price_czk <= cena * 1.02:
+        return "nejlevnější termín na trase"
+    return f"levněji {popis} za {_fmt_czk(cena)}"
+
+
 def format_instant(verdict) -> str:
     offer = verdict.offer
     lines = [f"🔥 <b>{html.escape(offer.name[:180])}</b>", ""]
@@ -166,6 +191,13 @@ def format_instant(verdict) -> str:
     term = format_term(offer.extra)
     if term:
         lines.append(f"📅 {html.escape(term)}")
+
+    kalendar = format_calendar(offer.extra, offer.price_czk)
+    if kalendar:
+        odkaz = offer.extra.get("kalendar_url")
+        lines.append(f'📉 <a href="{html.escape(odkaz, quote=True)}">'
+                     f'{html.escape(kalendar)}</a>' if odkaz
+                     else f"📉 {html.escape(kalendar)}")
 
     if verdict.reasons:
         lines.append("")
@@ -278,6 +310,9 @@ def _detail(item: dict) -> list[str]:
     term = item.get("term")
     if term:
         parts.append(html.escape(term))
+    kalendar = format_calendar(item, item.get("price_czk"))
+    if kalendar:
+        parts.append(html.escape(kalendar))
     return parts
 
 

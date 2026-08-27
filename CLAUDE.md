@@ -431,6 +431,14 @@ Odpověď nese `origin`, `destination`, `price`, `transfers`, `departure_at`,
 `link`, `airline` a doby letu. `link` je relativní (`/search/PRG2208SKP1?t=…`),
 takže se předsazuje `https://www.aviasales.com`.
 
+Používá se **jediný endpoint** (`v3/prices_for_dates`), přestože token otevírá
+i další. Druhá půlka `--check-travelpayouts` proto projde žebřík kandidátů
+(`grouped_prices`, `get_latest_prices`, `prices/calendar`, `month-matrix`,
+`city-directions`) a u každého vypíše stav, počet záznamů a syrová jména polí.
+Cílem je **cenový kalendář trasy**: bot dnes vidí jen dnešní cenu a nemá jak
+poznat, že je to shodou okolností drahý termín. Navěsit na endpoint kód dřív,
+než se změří, co vrací, by u tohohle API byla chyba už potřetí.
+
 **Google Flights nemá jak.** Vlastní API Googlu na letenky (QPX Express) je
 vypnuté od dubna 2018 a náhrada není — ITA Software, která Google Flights
 pohání, se licencuje smluvně dopravcům, ne samoobsluhou. Zbývalo by stahovat

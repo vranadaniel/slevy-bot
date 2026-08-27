@@ -679,6 +679,91 @@ class _FxKoruny:
         return amount
 
 
+def _zkusit_endpointy(http, headers, origin: str, dest: str) -> None:
+    """Žebřík přes endpointy, které bychom mohli chtít.
+
+    Existuje ze stejného důvodu jako žebřík variant výš: mapování polí
+    u Travelpayouts vzniklo z dokumentace a dvakrát se ukázalo, že se
+    s realitou rozchází (`departure_at` není mez okna, `limit` je povinný,
+    ať API nevrátí jen třicet tras). Než se na nějaký endpoint navěsí kód,
+    chce to vidět, co doopravdy vrátí — tenhle výpis je ten měřicí krok.
+
+    Cílem je **cenový kalendář trasy**: umět ke zprávě dopsat „a za tři týdny
+    je to za 6 200 Kč". Dnes bot vidí jen dnešní cenu a nemá jak poznat, jestli
+    je to shodou okolností drahý termín.
+    """
+    mesic = (dt.date.today() + dt.timedelta(days=45)).strftime("%Y-%m")
+    prvni_v_mesici = mesic + "-01"
+
+    kandidati = [
+        ("v3/grouped_prices", "https://api.travelpayouts.com/aviasales/v3/grouped_prices",
+         {"origin": origin, "destination": dest, "currency": "czk",
+          "group_by": "departure_at", "market": "cz"}),
+        ("v3/get_latest_prices", "https://api.travelpayouts.com/aviasales/v3/get_latest_prices",
+         {"origin": origin, "destination": dest, "currency": "czk",
+          "period_type": "month", "one_way": "true", "limit": 30, "market": "cz"}),
+        ("v1/prices/calendar", "https://api.travelpayouts.com/v1/prices/calendar",
+         {"origin": origin, "destination": dest, "depart_date": mesic,
+          "currency": "czk", "calendar_type": "departure_date"}),
+        ("v1/prices/month-matrix", "https://api.travelpayouts.com/v1/prices/month-matrix",
+         {"origin": origin, "destination": dest, "month": prvni_v_mesici,
+          "currency": "czk", "show_to_affiliates": "true"}),
+        ("v2/prices/month-matrix", "https://api.travelpayouts.com/v2/prices/month-matrix",
+         {"origin": origin, "destination": dest, "month": prvni_v_mesici,
+          "currency": "czk", "show_to_affiliates": "true"}),
+        ("v1/prices/cheap", "https://api.travelpayouts.com/v1/prices/cheap",
+         {"origin": origin, "destination": dest, "depart_date": mesic,
+          "currency": "czk"}),
+        ("v1/city-directions", "https://api.travelpayouts.com/v1/city-directions",
+         {"origin": origin, "currency": "czk"}),
+    ]
+
+    print(f"\n--- DALŠÍ ENDPOINTY (trasa {origin}-{dest}, měsíc {mesic}) ---")
+    for jmeno, url, params in kandidati:
+        try:
+            # Session přímo: `Http.get` u 4xx zahodí tělo, a právě v něm API
+            # píše, který parametr se mu nelíbí.
+            resp = http.session.get(url, params=params, headers=headers, timeout=30)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {jmeno:24} SÍŤ: {exc}")
+            continue
+
+        if not resp.ok:
+            telo = (resp.text or "").strip().replace("\n", " ")[:120]
+            print(f"  {jmeno:24} {resp.status_code}  {telo}")
+            continue
+
+        try:
+            data = resp.json()
+        except ValueError:
+            print(f"  {jmeno:24} 200, ale odpověď není JSON")
+            continue
+
+        zaznamy = data.get("data") if isinstance(data, dict) else data
+        if isinstance(zaznamy, dict):          # klíčem bývá datum nebo cíl
+            klice = list(zaznamy)[:3]
+            prvni = zaznamy[klice[0]] if klice else None
+            print(f"  {jmeno:24} 200  záznamů: {len(zaznamy)}  klíče: {klice}")
+        elif isinstance(zaznamy, list):
+            prvni = zaznamy[0] if zaznamy else None
+            print(f"  {jmeno:24} 200  záznamů: {len(zaznamy)}")
+        else:
+            print(f"  {jmeno:24} 200  neznámý tvar: {str(data)[:90]}")
+            continue
+
+        if isinstance(prvni, dict):
+            print(f"  {'':24}      pole: {sorted(prvni)}")
+            ceny = [k for k in prvni if "price" in k or "value" in k]
+            if ceny:
+                print(f"  {'':24}      cena: "
+                      + ", ".join(f"{k}={prvni[k]}" for k in ceny))
+        elif prvni is not None:
+            print(f"  {'':24}      první záznam: {str(prvni)[:90]}")
+
+    print("\nPošli mi tenhle výpis. Z tvaru odpovědi poznám, který endpoint")
+    print("unese cenový kalendář trasy, a navěsím ho na zprávy o letenkách.")
+
+
 def run_check_travelpayouts(cfg) -> int:
     """Ověří token a ukáže, jak odpověď doopravdy vypadá.
 
@@ -765,6 +850,11 @@ def run_check_travelpayouts(cfg) -> int:
     if not offers:
         print("  ŽÁDNOU — pole se přejmenovala, oprav mapování")
         print(f"  syrová první nabídka: {rows[0]}")
+
+    # Druhý žebřík: co dalšího ten token otevírá. Cílem je cenový kalendář
+    # trasy, tedy odpověď na "a kdy je to levněji".
+    cil = (rows[0].get("destination") if rows else None) or "BCN"
+    _zkusit_endpointy(http, headers, origin, cil)
     return 0 if offers else 1
 
 
@@ -880,7 +970,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check-itad", action="store_true",
                         help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
     parser.add_argument("--check-travelpayouts", action="store_true",
-                        help="ověří token k Travelpayouts a tvar odpovědi")
+                        help="ověří token k Travelpayouts, tvar odpovědi a další endpointy")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 

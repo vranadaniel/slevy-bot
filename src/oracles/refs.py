@@ -55,6 +55,22 @@ class ReferenceOracle:
     def __init__(self, rules: list[dict]) -> None:
         self.rules = rules or []
 
+    def rule_for(self, offer: Offer) -> dict | None:
+        """První pravidlo, které na položku sedí.
+
+        Existuje kvůli `--check-references`, aby diagnostika nemusela
+        porovnávání opisovat a rozejít se s ním. `value_of` má o kousek
+        přísnější chování: pravidlo bez ceny přeskočí a zkusí další.
+        """
+        if _TRIAL_RE.search(offer.name or ""):
+            return None
+        haystack = (offer.name or "").lower()
+        for rule in self.rules:
+            terms = [t.lower() for t in rule.get("match", [])]
+            if terms and all(t in haystack for t in terms):
+                return rule
+        return None
+
     def value_of(self, offer: Offer) -> Value | None:
         # Ceník obchází práh důvěryhodnosti, takže jde rovnou na mobil. Zkušební
         # verze by tím dostala hodnotu plného předplatného: „Discord Nitro –

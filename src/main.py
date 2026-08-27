@@ -34,7 +34,7 @@ from .oracles.judge import JudgeOracle
 from .oracles.refs import ReferenceOracle
 from .score import DIGEST, INSTANT, NONE, Scorer
 from .shipping import ShippingPolicy
-from .sources.base import CATALOG
+from .sources.base import CATALOG, Offer
 from .sources.kinguin import KinguinSource
 from .sources.pepper import build_pepper_sources
 from .sources.ryanair import RyanairSource
@@ -954,6 +954,94 @@ def run_watch(cfg) -> int:
     return 0
 
 
+def run_check_references(cfg) -> int:
+    """Která pravidla ceníku ztratila rozlišovací schopnost.
+
+    Ceník obchází práh důvěryhodnosti, takže vadné pravidlo neznamená jednu
+    falešnou zprávu, ale desítky — a pohledem se nepozná. Cena v něm může být
+    úplně správná **ceníková cena výrobce** a přesto být k ničemu: antivirus
+    ani Windows se za ceníkovou cenu nikdy neprodávají, takže pravidlo hlásí
+    slevu pořád, a to není signál.
+
+    Neměří se tu tedy „správná hodnota" — na to by se muselo sáhnout po ceně
+    na trhu, který zrovna posuzujeme, a to je přesně ten kruh, kvůli kterému
+    bot hlásil Krakov za 748 Kč jako trhák. Měří se **rozlišovací schopnost**:
+    kolik procent položek by prahem prošlo i za svou úplně běžnou cenu. Sto
+    procent znamená, že pravidlo pálí vždycky a nic tím neříká.
+
+    Čte jen databázi, na síť nesahá.
+    """
+    store = Store(cfg.db_path)
+    oracle = ReferenceOracle(cfg.references)
+    history = HistoryOracle(store)
+    prah = float(cfg.get("thresholds.digest_ratio", 0.20))
+
+    print(f"Databáze: {cfg.db_path}")
+    print(f"Práh souhrnu: {prah:.0%} — pod ním jde položka do zprávy.\n")
+
+    podle_pravidla: dict = {}
+    for row in store.conn.execute(
+            "SELECT source, uid, name, category FROM products").fetchall():
+        offer = Offer(source=row["source"], kind=CATALOG, uid=row["uid"],
+                      name=row["name"] or "", price_czk=0.0, url="",
+                      category=row["category"], merchant="", credibility=1.0,
+                      extra={})
+        pravidlo = oracle.rule_for(offer)
+        if pravidlo is None:
+            continue
+        value = oracle.value_of(offer)
+        if value is None or value.real_value_czk <= 0:
+            continue
+
+        profile = store.price_profile(row["source"], row["uid"], history.window_days)
+        if profile is None or profile["span_days"] < history.min_span_days:
+            continue
+        if profile["median"] <= 0:
+            continue
+
+        klic = " + ".join(pravidlo.get("match", []))
+        podle_pravidla.setdefault(klic, []).append({
+            "nazev": row["name"] or "",
+            "median": profile["median"],
+            "hodnota": value.real_value_czk,
+        })
+
+    if not podle_pravidla:
+        print("Zatím není co porovnávat — chybí zralá cenová historie.")
+        store.close()
+        return 0
+
+    radky = []
+    for klic, polozky in podle_pravidla.items():
+        vzdy = sum(1 for p in polozky if p["median"] <= p["hodnota"] * prah)
+        podil = vzdy / len(polozky)
+        faktory = sorted(p["hodnota"] / p["median"] for p in polozky)
+        radky.append((podil, faktory[len(faktory) // 2], klic, len(polozky),
+                      vzdy, polozky[0]))
+
+    radky.sort(key=lambda r: (-r[0], -r[1]))
+    print("--- PRAVIDLA, KTERÁ PÁLÍ POŘÁD ---")
+    print("  „vždy“ = položek, které by prošly i za svou běžnou cenu\n")
+    print(f"  {'pravidlo':<34} {'položek':>8} {'vždy':>6} {'faktor':>8}")
+    for podil, faktor, klic, pocet, vzdy, ukazka in radky:
+        if podil <= 0:
+            continue
+        print(f"  {klic[:34]:<34} {pocet:>8} {podil:>5.0%} {faktor:>7.1f}×")
+        print(f"      {ukazka['nazev'][:60]}")
+        print(f"      ceník {ukazka['hodnota']:.0f} Kč · běžně se prodává "
+              f"za {ukazka['median']:.0f} Kč")
+
+    zdrave = [r for r in radky if r[0] <= 0]
+    print(f"\n  V pořádku je {len(zdrave)} pravidel z {len(radky)} "
+          "— těm položka projde jen při skutečném poklesu.")
+    print("\nFaktor je poměr ceníkové ceny k té, za kterou se to běžně prodává.")
+    print("Vysoký sám o sobě chybou není — Kinguin je šedý trh a legitimní")
+    print("rozdíl proti obchodu tam je. Chyba je sloupec „vždy“ na sto")
+    print("procentech: takové pravidlo neumí rozlišit dobrou nabídku od běžné.")
+    store.close()
+    return 0
+
+
 def run_check_travelpayouts(cfg) -> int:
     """Ověří token a ukáže, jak odpověď doopravdy vypadá.
 
@@ -1159,6 +1247,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="co bot nasbíral: zralost historie, upozornění, fronta")
     parser.add_argument("--check-itad", action="store_true",
                         help="ověří klíč k IsThereAnyDeal a měnu odpovědí")
+    parser.add_argument("--check-references", action="store_true",
+                        help="ktera pravidla ceniku ztratila rozlisovaci schopnost")
     parser.add_argument("--watch", action="store_true",
                         help="zkontroluje hlidane trasy a prikazy z Telegramu")
     parser.add_argument("--check-travelpayouts", action="store_true",
@@ -1182,6 +1272,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_stats(cfg)
     if args.check_itad:
         return run_check_itad(cfg)
+    if args.check_references:
+        return run_check_references(cfg)
     if args.watch:
         return run_watch(cfg)
     if args.check_travelpayouts:

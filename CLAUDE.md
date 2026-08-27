@@ -32,6 +32,7 @@ python -m src.main --bootstrap               # označí feedy za viděné, nic n
 python -m src.main --stats                   # co bot nasbíral, bez sahání na síť
 python -m src.main --backup                  # konzistentní kopie databáze
 python -m src.main --watch                   # hlidane trasy + prikazy z Telegramu
+python -m src.main --check-references        # ktera pravidla ceniku pali porad
 ```
 
 `--explain` je hlavní ladicí nástroj — ukáže cenu, credibility, odkud přišla
@@ -225,6 +226,24 @@ hranicí leží Skyrim, System Shock nebo Silent Hill 2. Filtruje
 `drop_cheap_games` v `main.py`, a to **před rozdělením na upozornění a souhrn**
 — u her umí okamžité upozornění spustit vlastní cenová historie, takže
 filtrovat jen souhrn by nestačilo.
+
+**Vadné pravidlo v ceníku nepozná pohled, jen měření.** Cena v pravidle může
+být úplně správná ceníková cena výrobce a přesto být k ničemu: antivirus,
+VPN ani Windows se za ceníkovou cenu nikdy neprodávají, takže pravidlo hlásí
+slevu pořád — a co pálí vždycky, není signál. Ceník navíc obchází práh
+credibility, takže jedno vadné pravidlo znamená desítky zpráv, ne jednu.
+Ukáže to `--check-references`: pro každé pravidlo spočítá, kolik procent
+položek by prahem prošlo **i za svou úplně běžnou cenu**. Sto procent je
+diagnóza. Schválně se tam neměří „správná hodnota" — na to by se muselo sáhnout
+po ceně na trhu, který zrovna posuzujeme, a to je tentýž kruh jako u Krakova
+za 748 Kč. Vysoký faktor sám o sobě chyba není, Kinguin je šedý trh.
+
+**`value_czk_per_month` × počet měsíců u víceletých licencí přestřeluje.**
+Komentář v `references.yaml` tvrdil, že to „škáluje správně i u tříleté
+licence" — neškáluje. Výrobci prodávají tři roky zhruba za dvojnásobek roku,
+ne za trojnásobek, takže tříletý ESET dostane hodnotu 3 600 Kč tam, kde
+výrobce chce 2 000. Chyba se sčítá s tou předchozí a výsledkem je pravidlo,
+které pálí vždycky.
 
 **Popularita se nedostala do `score.py`.** Je to věc řazení a filtrování
 souhrnu, ne ocenění, a `score.py` nemá vědět, že něco jako hra existuje.

@@ -420,6 +420,20 @@ Odpověď nese `origin`, `destination`, `price`, `transfers`, `departure_at`,
 `link`, `airline` a doby letu. `link` je relativní (`/search/PRG2208SKP1?t=…`),
 takže se předsazuje `https://www.aviasales.com`.
 
+**Google Flights nemá jak.** Vlastní API Googlu na letenky (QPX Express) je
+vypnuté od dubna 2018 a náhrada není — ITA Software, která Google Flights
+pohání, se licencuje smluvně dopravcům, ne samoobsluhou. Zbývalo by stahovat
+web, jenže ten z Evropy vůbec nedojde k výsledkům: `www.google.com/travel/
+flights` přesměruje na **`consent.google.com`** a vrátí souhlasovou zeď
+(změřeno — dva megabajty HTML, v nich ani jedna cena). I kdyby se obešla,
+výsledky se dokreslují JavaScriptem a hledání se zadává protobufem v parametru
+`tfs`, který se mění. Placení překupníci (SerpApi a spol.) existují, ale stojí
+desítky dolarů měsíčně za data, která Travelpayouts dává zdarma.
+
+Hlavně by to ale nic nespravilo: u katalogového cestování rozhoduje **vlastní
+cenová historie**, ne šíře katalogu. Čtvrtý zdroj tras potřebuje přesně stejné
+dva dny zrání jako ty tři stávající.
+
 **Letenková API:** `tequila.kiwi.com` je dnes **jen na pozvání** — portál nemá
 samoobslužnou registraci, jen přihlášení a odkaz na `affiliates@kiwi.com`.
 `api.travelpayouts.com` odpovídá `401`, tedy žije a chce token, který se dá

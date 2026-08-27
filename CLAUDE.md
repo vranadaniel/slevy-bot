@@ -227,6 +227,20 @@ hranicí leží Skyrim, System Shock nebo Silent Hill 2. Filtruje
 — u her umí okamžité upozornění spustit vlastní cenová historie, takže
 filtrovat jen souhrn by nestačilo.
 
+**Ruční ceník nesmí spouštět položku, která má vlastní historii.** Ceníková
+cena výrobce u licencí a předplatného na šedém trhu nikdy neplatí. Změřeno po
+měsíci sbírání (`--check-references`): Windows 10 Pro má v ceníku 4 500 Kč
+a na Kinguinu se prodává za 242 Kč, AVG Ultimate 5 400 proti 774, Gemini AI Pro
+8 820 proti 145. U **22 pravidel ze 49** by položka prošla prahem i za svou
+úplně běžnou cenu — a co pálí vždycky, není signál. Snížit sazby by znamenalo
+kalibrovat ceník podle trhu, který zrovna posuzujeme; proto místo toho platí
+totéž co u her a ITAD: jakmile má katalogová položka zralou historii, musí
+ceníku dát za pravdu i ona, jinak neprojde. Řídí to `_reference_needs_history`
+ve `score.py` a podmínkou je **historické minimum**, ne další práh v procentech
+— je to bezparametrové a odpovídá to na otázku „je zrovna teď dobrá chvíle to
+koupit". Studený start zůstává: bez historie rozhoduje ceník jako dřív, takže
+Gemini za 65 Kč projde i u položky, o které ještě nic nevíme.
+
 **Vadné pravidlo v ceníku nepozná pohled, jen měření.** Cena v pravidle může
 být úplně správná ceníková cena výrobce a přesto být k ničemu: antivirus,
 VPN ani Windows se za ceníkovou cenu nikdy neprodávají, takže pravidlo hlásí

@@ -44,6 +44,17 @@ class HistoryOracle:
             confidence=confidence,
         )
 
+    def has_history(self, offer: Offer) -> bool:
+        """Má položka dost dlouhou historii, aby o ní mohla rozhodovat?
+
+        Používá to `score._reference_needs_history`: dokud historie není,
+        rozhoduje ruční ceník (studený start), jakmile je, rozhoduje ona.
+        """
+        if offer.kind != CATALOG:
+            return False
+        profile = self.store.price_profile(offer.source, offer.uid, self.window_days)
+        return profile is not None and profile["span_days"] >= self.min_span_days
+
     def is_all_time_low(self, offer: Offer) -> bool:
         """Je cena níž, než jsme kdy DŘÍV viděli?
 

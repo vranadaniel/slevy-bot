@@ -401,3 +401,105 @@ class TestPrilisHrubaPravidla:
         """Zúžení nesmí rozbít ocenění plné verze."""
         offer = _kinguin("Adobe Creative Cloud Pro Top-Up > 3 Month Subscription", 695.0)
         assert scorer.prescore([offer])[0].value.real_value_czk == 1600 * 3
+
+
+class TestCenikCekaNaHistorii:
+    """Ceníková cena výrobce u licencí na šedém trhu nikdy neplatí.
+
+    Změřeno na živých datech po měsíci sbírání: Windows 10 Pro má v ceníku
+    4 500 Kč a na Kinguinu se prodává za 242 Kč, AVG Ultimate 5 400 proti 774.
+    U 22 pravidel ze 49 by položka prošla prahem **i za svou úplně běžnou
+    cenu** — a co pálí vždycky, není signál.
+
+    Snížit sazby by znamenalo kalibrovat ceník podle trhu, který zrovna
+    posuzujeme. Správná odpověď je stejná jako u her a ITAD: jakmile má
+    položka vlastní historii, rozhoduje ona.
+    """
+
+    def _scorer(self, store):
+        from src.oracles.history import HistoryOracle
+        from src.oracles.refs import ReferenceOracle
+        from src.score import Scorer
+        from src.shipping import ShippingPolicy
+
+        cfg = load_config()
+        history = HistoryOracle(store)
+        return Scorer(cfg, store, [history, ReferenceOracle(cfg.references)],
+                      history, ShippingPolicy(cfg.merchants))
+
+    def _historie(self, store, uid, ceny):
+        """Zapíše ceny tak, aby historie byla zralá."""
+        import datetime as dt
+
+        for cena in ceny:
+            store.record_price("kinguin", uid, "Windows 10 Professional OEM Key",
+                               "u", "SOFTWARE", cena)
+        stare = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=5)).isoformat()
+        store.conn.execute("UPDATE price_log SET ts = ?", (stare,))
+        store.commit()
+
+    def _offer(self, cena, uid="w1"):
+        from src.sources.base import CATALOG, Offer
+
+        return Offer(source="kinguin", kind=CATALOG, uid=uid,
+                     name="Windows 10 Professional OEM Key", price_czk=cena,
+                     url="u", category="SOFTWARE", merchant="kinguin",
+                     credibility=0.9, extra={"product_type": "SOFTWARE"})
+
+    def test_ordinary_price_no_longer_fires(self, tmp_path):
+        """Přesně ta záplava: položka za svou úplně běžnou cenu."""
+        from src.score import NONE
+        from src.store import Store
+
+        store = Store(tmp_path / "s.db")
+        self._historie(store, "w1", [242.0])
+        verdict = self._scorer(store).prescore([self._offer(242.0)])[0]
+        store.close()
+
+        assert verdict.value is not None, "ceník ji má pořád ocenit"
+        assert verdict.level == NONE
+        assert any("vlastní historii" in r for r in verdict.reasons)
+
+    def test_all_time_low_still_fires(self, tmp_path):
+        """Když je to opravdu nejlíž, co jsme kdy viděli, je to zpráva."""
+        from src.score import NONE
+        from src.store import Store
+
+        store = Store(tmp_path / "s.db")
+        self._historie(store, "w1", [242.0, 300.0])
+        verdict = self._scorer(store).prescore([self._offer(90.0)])[0]
+        store.close()
+
+        assert verdict.level != NONE
+
+    def test_cold_start_is_untouched(self, tmp_path):
+        """Bez historie rozhoduje ceník — jinak by bot první dny mlčel úplně.
+
+        Je to zároveň ochrana referenčního případu: Gemini AI Pro za 65 Kč
+        musí projít i tehdy, když o té položce ještě nic nevíme.
+        """
+        from src.score import INSTANT
+        from src.store import Store
+
+        store = Store(tmp_path / "s.db")
+        scorer = self._scorer(store)
+        offer = self._offer(90.0, uid="nova")
+        offer.name = "Google Gemini Top-Up > AI Pro > 18 Months"
+        offer.price_czk = 65.0
+        verdict = scorer.prescore([offer])[0]
+        store.close()
+
+        assert verdict.level == INSTANT
+
+    def test_history_priced_items_are_not_affected(self, tmp_path):
+        """Brzda platí jen na ceník. Když cenu určila vlastní historie,
+        je to měření, ne cizí tvrzení."""
+        from src.store import Store
+
+        store = Store(tmp_path / "s.db")
+        self._historie(store, "w1", [1000.0])
+        verdict = self._scorer(store).prescore([self._offer(100.0)])[0]
+        store.close()
+
+        assert verdict.value.origin == "history"
+        assert not any("vlastní historii" in r for r in verdict.reasons)

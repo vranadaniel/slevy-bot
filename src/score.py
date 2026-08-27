@@ -185,6 +185,33 @@ class Scorer:
         """
         return offer.kind == CATALOG and bool(self._policy_for(offer).get("catalog_history_only"))
 
+    def _reference_needs_history(self, verdict) -> bool:
+        """Musí ruční ceník u téhle položky počkat na vlastní historii?
+
+        Ceník nese ceníkovou cenu výrobce, a ta u licencí a předplatného na
+        šedém trhu nikdy neplatí. Změřeno na živých datech: Windows 10 Pro má
+        v ceníku 4 500 Kč a na Kinguinu se prodává za 242 Kč, AVG Ultimate
+        5 400 proti 774. Pravidlo pak pálí při KAŽDÉM pozorování a to není
+        signál — u 22 pravidel ze 49 by položka prošla i za svou úplně běžnou
+        cenu.
+
+        Snížit sazby by znamenalo kalibrovat ceník podle trhu, který zrovna
+        posuzujeme — tentýž kruh, kvůli kterému bot hlásil Krakov za 748 Kč
+        jako trhák. Správná odpověď je stejná jako u her a ITAD: **jakmile má
+        položka vlastní historii, rozhoduje ona.** Ceník zůstává na zobrazení
+        hodnoty a na studený start.
+
+        Podmínkou je historické minimum, ne práh v procentech. Je to
+        bezparametrové, používá to `is_all_time_low`, které tu už je, a
+        odpovídá to na otázku „je zrovna teď dobrá chvíle to koupit".
+        """
+        if verdict.value.origin != "references":
+            return False
+        if verdict.offer.kind != CATALOG:
+            return False
+        return self.history.has_history(verdict.offer)
+
+
     def _finalize(self, verdict: Verdict) -> None:
         offer = verdict.offer
         verdict.reasons = []
@@ -252,6 +279,18 @@ class Scorer:
                     and verdict.value.origin == "history" and ratio <= 0.5):
                 qualifies_instant = True
                 verdict.reasons.append("propad na historické minimum")
+
+            # Ceníková cena výrobce u licencí na šedém trhu nikdy neplatí,
+            # takže by pravidlo pálilo pořád. Jakmile má položka vlastní
+            # historii, musí ceníku dát za pravdu i ona.
+            if self._reference_needs_history(verdict):
+                if verdict.all_time_low:
+                    verdict.reasons.append("a zároveň historicky nejnižší cena")
+                else:
+                    qualifies_instant = False
+                    qualifies_digest = False
+                    verdict.reasons.append(
+                        "ceníková sleva, ale ne proti vlastní historii")
 
         if qualifies_instant:
             # Práh důvěryhodnosti hlídá nedůvěryhodné OCENĚNÍ, ne položku samotnou.

@@ -61,13 +61,13 @@ class JudgeOracle:
         # Pokud je použit Google AI Studio klíč a base_url nebyla explicitně změněna na jinou službu
         if self.gemini_key and (not custom_base or "openrouter.ai" in custom_base):
             self.base_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-            raw_model = cfg.get("judge.model") or "gemini-2.5-flash"
+            raw_model = cfg.get("judge.model") or "gemini-3.8-flash"
             self.model = raw_model.removeprefix("google/") if raw_model.startswith("google/") else raw_model
             if "/" in self.model:
-                self.model = "gemini-2.5-flash"
+                self.model = "gemini-3.8-flash"
         else:
             self.base_url = custom_base or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-            self.model = cfg.get("judge.model", "gemini-2.5-flash")
+            self.model = cfg.get("judge.model", "gemini-3.8-flash")
 
         self.max_items = int(cfg.get("judge.max_items_per_call", 25))
         self.max_calls_per_day = int(cfg.get("judge.max_calls_per_day", 60))

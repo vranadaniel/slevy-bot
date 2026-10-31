@@ -344,20 +344,17 @@ games:
 
 judge:
   enabled: true
-  base_url: "https://openrouter.ai/api/v1/chat/completions"
-  # Ceny na OpenRouteru za milion tokenů (ověřeno 27. 7. 2026):
-  #   deepseek/deepseek-v4-flash    0,14 vstup / 0,28 výstup
-  #   google/gemini-2.5-flash-lite  0,10 vstup / 0,40 výstup
-  # Na naší dávce (~5 000 vstupních, ~2 500 výstupních tokenů) to vyjde na
-  # 0,0014 vs 0,0015 USD, tedy prakticky nastejno. Volba modelu tady nerozhoduje
-  # o nákladech — o těch rozhoduje `max_calls_per_day` a to, že po deduplikaci
-  # většina běhů soudce nezavolá vůbec.
-  model: "deepseek/deepseek-v4-flash"
+  # Výchozí je Google AI Studio přes OpenAI-kompatibilní endpoint (při nastavení GEMINI_API_KEY):
+  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+  model: "gemini-2.5-flash"
+  # Alternativa pro OpenRouter (při nastavení OPENROUTER_API_KEY):
+  # base_url: "https://openrouter.ai/api/v1/chat/completions"
+  # model: "deepseek/deepseek-v4-flash"
   max_items_per_call: 25
   # Rychlý sken cestování běží každých deset minut a pokaždé může přinést pár
-  # nových letenek, které jinak nikdo neocení. Strop je proto vyšší než dřív;
-  # jsou to malé dávky, takže i vyčerpaný strop stojí jednotky centů denně.
+  # nových letenek, které jinak nikdo neocení. Strop je proto vyšší než dřív.
   max_calls_per_day: 60
+  max_tokens: 2000
   timeout_s: 60
 
 telegram:

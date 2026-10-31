@@ -105,3 +105,12 @@ class TestJudge:
         judge.judge([_offer(uid=str(i)) for i in range(50)])
 
         assert http.calls == 1, "jeden dávkový dotaz, ne padesát"
+
+    def test_gemini_key_uses_google_endpoint(self, tmp_path):
+        cfg = load_config()
+        cfg.openrouter_key = ""
+        cfg.gemini_key = "AIzaSyTest"
+        judge = JudgeOracle(FakeHttp("[]"), Store(tmp_path / "j.db"), cfg)
+        assert "generativelanguage.googleapis.com" in judge.base_url
+        assert "gemini" in judge.model
+        assert judge.api_key == "AIzaSyTest"

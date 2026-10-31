@@ -259,6 +259,18 @@ class TestPrehlaseni:
 
         assert len(posta.zpravy) == 1
 
+    def test_run_watch_with_telegram_chat_id(self, tmp_path, monkeypatch):
+        cfg = load_config()
+        cfg.raw["db_path"] = str(tmp_path / "w2.db")
+        cfg.telegram_token = "tok"
+        cfg.telegram_chat_id = "12345"
+        s = Store(cfg.db_path)
+        s.watch_add(parse_watch("/hlidat BCN 1.9.2099 31.10.2099 9"))
+        s.close()
+        posta = self.Odesilatel()
+        self._run(cfg, 1500.0, posta, monkeypatch)
+        assert len(posta.zpravy) == 1
+
 
 class TestZprava:
     def _trip(self, cena=1610.0):

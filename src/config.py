@@ -34,6 +34,8 @@ class Config:
         # v --dry-run a bez AI soudce.
         self.telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        self.gemini_key = (os.environ.get("GEMINI_API_KEY", "").strip()
+                           or os.environ.get("GOOGLE_API_KEY", "").strip())
         self.openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         self.itad_key = os.environ.get("ITAD_API_KEY", "").strip()
         self.travelpayouts_token = os.environ.get("TRAVELPAYOUTS_TOKEN", "").strip()
@@ -53,12 +55,25 @@ class Config:
         return p if p.is_absolute() else ROOT / p
 
     @property
+    def telegram_chat(self) -> str:
+        """Alias pro telegram_chat_id kvůli zpětné kompatibilitě."""
+        return self.telegram_chat_id
+
+    @telegram_chat.setter
+    def telegram_chat(self, value: str) -> None:
+        self.telegram_chat_id = value
+
+    @property
     def has_telegram(self) -> bool:
         return bool(self.telegram_token and self.telegram_chat_id)
 
     @property
+    def ai_key(self) -> str:
+        return self.gemini_key or self.openrouter_key
+
+    @property
     def judge_enabled(self) -> bool:
-        return bool(self.get("judge.enabled", False)) and bool(self.openrouter_key)
+        return bool(self.get("judge.enabled", False)) and bool(self.ai_key)
 
     @property
     def itad_enabled(self) -> bool:

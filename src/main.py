@@ -851,7 +851,7 @@ def _zpracuj_prikazy(cfg, store, telegram) -> int:
         # Příkazy se berou JEN z vlastního chatu. Bota si může najít kdokoliv
         # a zakládat hlídání cizím lidem není žádoucí.
         chat = str((zprava.get("chat") or {}).get("id") or "")
-        if chat != str(cfg.telegram_chat) or not text.startswith("/"):
+        if chat != str(cfg.telegram_chat_id) or not text.startswith("/"):
             continue
 
         odpoved = _prikaz(cfg, store, text)
@@ -890,8 +890,8 @@ def run_watch(cfg) -> int:
     """
     http = build_http(cfg)
     store = Store(cfg.db_path)
-    telegram = (Telegram(http, cfg.telegram_token, cfg.telegram_chat)
-                if cfg.telegram_token and cfg.telegram_chat else None)
+    telegram = (Telegram(http, cfg.telegram_token, cfg.telegram_chat_id)
+                if cfg.has_telegram else None)
 
     prikazu = _zpracuj_prikazy(cfg, store, telegram)
     if prikazu:

@@ -53,11 +53,25 @@ class JudgeOracle:
         self.http = http
         self.store = store
         self.cfg = cfg
-        self.api_key = cfg.openrouter_key
-        self.base_url = cfg.get("judge.base_url", "https://openrouter.ai/api/v1/chat/completions")
-        self.model = cfg.get("judge.model", "google/gemini-2.5-flash-lite")
+        self.gemini_key = getattr(cfg, "gemini_key", "")
+        self.openrouter_key = getattr(cfg, "openrouter_key", "")
+        self.api_key = self.gemini_key or self.openrouter_key
+
+        custom_base = cfg.get("judge.base_url")
+        # Pokud je použit Google AI Studio klíč a base_url nebyla explicitně změněna na jinou službu
+        if self.gemini_key and (not custom_base or "openrouter.ai" in custom_base):
+            self.base_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            raw_model = cfg.get("judge.model") or "gemini-2.5-flash"
+            self.model = raw_model.removeprefix("google/") if raw_model.startswith("google/") else raw_model
+            if "/" in self.model:
+                self.model = "gemini-2.5-flash"
+        else:
+            self.base_url = custom_base or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+            self.model = cfg.get("judge.model", "gemini-2.5-flash")
+
         self.max_items = int(cfg.get("judge.max_items_per_call", 25))
-        self.max_calls_per_day = int(cfg.get("judge.max_calls_per_day", 20))
+        self.max_calls_per_day = int(cfg.get("judge.max_calls_per_day", 60))
+        self.max_tokens = int(cfg.get("judge.max_tokens", 2000))
         self.timeout_s = int(cfg.get("judge.timeout_s", 60))
 
     def available(self) -> bool:
@@ -93,6 +107,7 @@ class JudgeOracle:
                 {"role": "user", "content": json.dumps(payload_items, ensure_ascii=False)},
             ],
             "temperature": 0,
+            "max_tokens": self.max_tokens,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
